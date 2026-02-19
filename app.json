@@ -1,7 +1,30 @@
 {
-  "name": "GymView",
-  "displayName": "GymView",
-  "plugins": [
-    "expo-router"
-  ]
+  "expo": {
+    "name": "GymView",
+    "slug": "gymview",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "gymview",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gymview.app"
+    },
+    "android": {
+      "package": "com.gymview.app"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Necesitamos acceso a la cámara para escanear códigos QR de asistencia."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
 }

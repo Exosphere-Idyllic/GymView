@@ -1,242 +1,154 @@
 // app/(auth)/login.tsx
-
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/store/AuthContext';
-
-/**
- * Pantalla de Login
- * Implementa RF02 - Autenticación
- */
+import Colors from '../../src/theme/colors';
 
 export default function LoginScreen() {
   const [usuario, setUsuario] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
 
   const { login } = useAuth();
   const router = useRouter();
 
   const handleLogin = async () => {
-    // Validaciones
     if (!usuario.trim() || !contrasena.trim()) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
+      Alert.alert('Campos requeridos', 'Por favor completa usuario y contraseña');
       return;
     }
-
     try {
       setIsLoading(true);
-      await login({ usuario, contrasena });
-
-      // Login exitoso - redirigir a dashboard
+      await login({ usuario: usuario.trim(), contrasena });
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert(
-        'Error de autenticación',
-        error.message || 'Usuario o contraseña incorrectos'
-      );
+      Alert.alert('Error', error.message || 'Credenciales incorrectas');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleForgotPassword = () => {
-    // Implementar recuperación de contraseña
-    Alert.alert(
-      'Recuperar contraseña',
-      'Funcionalidad en desarrollo',
-      [{ text: 'OK' }]
-    );
-  };
-
-  const handleRegister = () => {
-    router.push('/(auth)/registro');
-  };
-
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.content}>
-        {/* Header */}
+    <KeyboardAvoidingView style={styles.wrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* Logo / Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>🏋️</Text>
-          <Text style={styles.title}>GymView</Text>
-          <Text style={styles.subtitle}>Sistema de Gestión de Gimnasio</Text>
+          <Text style={styles.logoIcon}>⚡</Text>
+          <Text style={styles.logoText}>IRON FITNESS</Text>
+          <Text style={styles.subtitle}>Sistema de Gestión</Text>
         </View>
 
-        {/* Form */}
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
+        {/* Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Acceso al Sistema</Text>
+
+          {/* Usuario */}
+          <View style={styles.inputGroup}>
             <Text style={styles.label}>Usuario</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ingresa tu usuario"
-              placeholderTextColor="#999"
-              value={usuario}
-              onChangeText={setUsuario}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isLoading}
-            />
+            <View style={styles.inputRow}>
+              <Text style={styles.inputIcon}>👤</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ingresa tu usuario"
+                placeholderTextColor="#666"
+                value={usuario}
+                onChangeText={setUsuario}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isLoading}
+              />
+            </View>
           </View>
 
-          <View style={styles.inputContainer}>
+          {/* Contraseña */}
+          <View style={styles.inputGroup}>
             <Text style={styles.label}>Contraseña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ingresa tu contraseña"
-              placeholderTextColor="#999"
-              value={contrasena}
-              onChangeText={setContrasena}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isLoading}
-              onSubmitEditing={handleLogin}
-            />
+            <View style={styles.inputRow}>
+              <Text style={styles.inputIcon}>🔒</Text>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="Ingresa tu contraseña"
+                placeholderTextColor="#666"
+                value={contrasena}
+                onChangeText={setContrasena}
+                secureTextEntry={!showPass}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isLoading}
+                onSubmitEditing={handleLogin}
+              />
+              <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
+                <Text style={{ color: '#666' }}>{showPass ? '🙈' : '👁'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
+          {/* Botón */}
           <TouchableOpacity
-            style={styles.forgotPassword}
-            onPress={handleForgotPassword}
-            disabled={isLoading}
-          >
-            <Text style={styles.forgotPasswordText}>
-              ¿Olvidaste tu contraseña?
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, isLoading && styles.buttonDisabled]}
+            style={[styles.btn, isLoading && styles.btnDisabled]}
             onPress={handleLogin}
             disabled={isLoading}
           >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Iniciar Sesión</Text>
-            )}
+            {isLoading
+              ? <ActivityIndicator color={Colors.black} />
+              : <Text style={styles.btnText}>INGRESAR</Text>
+            }
           </TouchableOpacity>
+
+          {/* Demo hint */}
+          <View style={styles.demoBox}>
+            <Text style={styles.demoTitle}>👆 Usuarios de prueba</Text>
+            <Text style={styles.demoText}>admin / 1234 → Administrador</Text>
+            <Text style={styles.demoText}>recep / 1234 → Recepcionista</Text>
+            <Text style={styles.demoText}>coach / 1234 → Entrenador</Text>
+            <Text style={styles.demoText}>juan / 1234 → Cliente</Text>
+          </View>
         </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>¿No tienes cuenta?</Text>
-          <TouchableOpacity onPress={handleRegister} disabled={isLoading}>
-            <Text style={styles.registerLink}>Registrarse</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        <Text style={styles.footer}>Iron Fitness © 2026 – Quito, Ecuador</Text>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
+  wrapper: { flex: 1, backgroundColor: Colors.background },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 40 },
+  header: { alignItems: 'center', marginBottom: 32 },
+  logoIcon: { fontSize: 56, marginBottom: 8 },
+  logoText: { fontSize: 28, fontWeight: 'bold', color: Colors.primary, letterSpacing: 2 },
+  subtitle: { fontSize: 14, color: Colors.textMuted, marginTop: 4 },
+  card: {
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: 16, padding: 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
   },
-  content: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
+  cardTitle: { fontSize: 18, fontWeight: '600', color: Colors.textMuted, textAlign: 'center', marginBottom: 24 },
+  inputGroup: { marginBottom: 18 },
+  label: { fontSize: 13, color: '#aaa', marginBottom: 6, fontWeight: '500' },
+  inputRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#2c2c2c', borderWidth: 1, borderColor: '#444', borderRadius: 10, paddingHorizontal: 12,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
+  inputIcon: { fontSize: 16, marginRight: 8 },
+  input: { flex: 1, color: Colors.text, paddingVertical: 14, fontSize: 15 },
+  eyeBtn: { padding: 8 },
+  btn: {
+    backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 16,
+    alignItems: 'center', marginTop: 8,
   },
-  logo: {
-    fontSize: 64,
-    marginBottom: 16,
+  btnDisabled: { backgroundColor: '#555' },
+  btnText: { color: Colors.black, fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
+  demoBox: {
+    marginTop: 20, padding: 12, backgroundColor: '#1a1a1a',
+    borderRadius: 8, borderLeftWidth: 3, borderLeftColor: Colors.primary,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
-  form: {
-    marginBottom: 24,
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 16,
-    fontSize: 16,
-    color: '#333',
-  },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
-  },
-  forgotPasswordText: {
-    color: '#007AFF',
-    fontSize: 14,
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  registerLink: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
+  demoTitle: { color: Colors.primary, fontWeight: '600', marginBottom: 6, fontSize: 13 },
+  demoText: { color: '#888', fontSize: 12, marginBottom: 2 },
+  footer: { textAlign: 'center', color: '#555', fontSize: 12, marginTop: 24 },
 });

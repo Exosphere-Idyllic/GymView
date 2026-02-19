@@ -4,14 +4,30 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@components/*": ["./src/components/*"],
-      "@services/*": ["./src/services/*"],
-      "@utils/*": ["./src/utils/*"],
-      "@types/*": ["./src/types/*"],
-      "@hooks/*": ["./src/hooks/*"],
-      "@config/*": ["./src/config/*"],
-      "@store/*": ["./src/store/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@components/*": [
+        "./src/components/*"
+      ],
+      "@services/*": [
+        "./src/services/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*"
+      ],
+      "@types/*": [
+        "./src/types/*"
+      ],
+      "@hooks/*": [
+        "./src/hooks/*"
+      ],
+      "@config/*": [
+        "./src/config/*"
+      ],
+      "@store/*": [
+        "./src/store/*"
+      ]
     }
   },
   "include": [
@@ -20,5 +36,7 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }
