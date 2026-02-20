@@ -152,3 +152,11 @@ const styles = StyleSheet.create({
   demoText: { color: '#888', fontSize: 12, marginBottom: 2 },
   footer: { textAlign: 'center', color: '#555', fontSize: 12, marginTop: 24 },
 });
+
+const webStyles = Platform.OS === 'web' ? {
+    wrapper: {
+        maxWidth: 500,
+        alignSelf: 'center',
+        width: '100%',
+    },
+} : {};

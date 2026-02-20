@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "scheme": "gymview",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.gymview.app"
@@ -15,16 +14,10 @@
       "package": "com.gymview.app"
     },
     "plugins": [
-      "expo-router",
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Necesitamos acceso a la cámara para escanear códigos QR de asistencia."
-        }
-      ]
+      "expo-router"
     ],
-    "experiments": {
-      "typedRoutes": true
+    "web": {
+      "bundler": "metro"
     }
   }
 }
