@@ -1,10 +1,11 @@
 // src/services/entrenadores.service.ts
-// Conectado a los endpoints de EntrenadorController.java
+// Conectado a EntrenadorController.java del backend
 
 import apiClient from './api.client';
 import { API_CONFIG } from '../config/api.config';
 
-// Basado en EntrenadorDashboardDTO.java
+// ─── Tipos (basados en EntrenadorDashboardDTO.java y NuevaRutinaDTO.java) ───
+
 export interface AlumnoResumen {
     idCliente: number;
     nombre: string;
@@ -30,16 +31,28 @@ export interface EntrenadorDashboard {
     listaRutinas: RutinaItem[];
 }
 
-// Basado en NuevaRutinaDTO.java
-export interface NuevaRutinaDTO {
+/**
+ * DTO para crear/editar una rutina.
+ * Los campos deben coincidir exactamente con NuevaRutinaDTO.java:
+ *   public int idCliente;
+ *   public String nombreRutina;
+ *   public List<Integer> idsEjercicios;
+ */
+export interface NuevaRutina {
     idCliente: number;
     nombreRutina: string;
     idsEjercicios: number[];
 }
 
+// Alias para compatibilidad con código existente que lo importa como NuevaRutinaDTO
+export type NuevaRutinaDTO = NuevaRutina;
+
+// ─── Servicio ──────────────────────────────────────────────────────────────
+
 const entrenadoresService = {
+
     /**
-     * Dashboard del entrenador con alumnos y rutinas
+     * Dashboard del entrenador: alumnos, stats y biblioteca de rutinas
      * GET /api/entrenadores/{idUsuario}/dashboard
      */
     async getDashboard(idUsuario: number): Promise<EntrenadorDashboard> {
@@ -52,7 +65,7 @@ const entrenadoresService = {
      * Crear nueva rutina para un alumno
      * POST /api/entrenadores/{idUsuario}/crearRutina
      */
-    async crearRutina(idUsuario: number, datos: NuevaRutinaDTO): Promise<{ mensaje: string }> {
+    async crearRutina(idUsuario: number, datos: NuevaRutina): Promise<{ mensaje: string }> {
         return apiClient.post(
             API_CONFIG.ENDPOINTS.ENTRENADORES.CREAR_RUTINA(idUsuario),
             datos
@@ -60,7 +73,7 @@ const entrenadoresService = {
     },
 
     /**
-     * Ver agenda del día
+     * Agenda del día (alumnos con rutinas activas hoy)
      * GET /api/entrenadores/{idUsuario}/agenda
      */
     async getAgenda(idUsuario: number): Promise<AlumnoResumen[]> {
@@ -70,10 +83,10 @@ const entrenadoresService = {
     },
 
     /**
-     * Editar una rutina existente
+     * Editar rutina existente (reemplaza todos los ejercicios)
      * PUT /api/entrenadores/rutinas/{idRutina}
      */
-    async editarRutina(idRutina: number, datos: NuevaRutinaDTO): Promise<{ mensaje: string }> {
+    async editarRutina(idRutina: number, datos: NuevaRutina): Promise<{ mensaje: string }> {
         return apiClient.put(
             API_CONFIG.ENDPOINTS.ENTRENADORES.RUTINA_ID(idRutina),
             datos
@@ -81,7 +94,7 @@ const entrenadoresService = {
     },
 
     /**
-     * Desactivar/eliminar rutina (borrado lógico)
+     * Borrado lógico de rutina (activa = false)
      * DELETE /api/entrenadores/rutinas/{idRutina}
      */
     async eliminarRutina(idRutina: number): Promise<{ mensaje: string }> {

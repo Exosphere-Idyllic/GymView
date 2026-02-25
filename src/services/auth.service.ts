@@ -1,24 +1,29 @@
 // src/services/auth.service.ts
-// Conectado a: POST /api/auth/login  |  POST /api/auth/registro  |  POST /api/auth/verificar
+// Endpoints: AuthController.java en el backend
 
 import apiClient from './api.client';
 import { API_CONFIG } from '../config/api.config';
+
+// ─── Tipos de petición ──────────────────────────────────────────────────────
 
 export interface LoginRequest {
     usuario: string;
     contrasena: string;
 }
 
-// Respuesta real del backend: AuthController.java -> UsuarioDAO.login()
+// La respuesta real del backend (UsuarioDAO.login → AuthController.login)
+// El backend devuelve el objeto Usuario serializado con Yasson/JSON-B
 export interface LoginResponse {
-    id_usuario: number;
-    id_rol: number;        // 1=admin, 2=recepcionista, 3=entrenador, 4=cliente
+    idUsuario: number;      // JSON-B serializa "idUsuario" (camelCase del getter Java)
+    idRol: number;
     usuario: string;
     activo: boolean;
     email: string | null;
-    // Campos extra opcionales que puede devolver
-    nombre?: string;
-    apellido?: string;
+    nombre?: string | null;
+    apellido?: string | null;
+    // Aliases en minúsculas por si el servidor los devuelve así
+    id_usuario?: number;
+    id_rol?: number;
 }
 
 export interface RegistroRequest {
@@ -27,10 +32,10 @@ export interface RegistroRequest {
     cedula: string;
     telefono: string;
     email: string;
-    fechaNacimiento: string;   // "YYYY-MM-DD"
+    fechaNacimiento: string;  // "YYYY-MM-DD"
     usuario: string;
     contrasena: string;
-    idRol?: number;            // Default: 4 (cliente)
+    idRol?: number;           // Default 4 (cliente)
 }
 
 export interface AdminDashboardResponse {
@@ -56,20 +61,45 @@ export interface CrearUsuarioAdminRequest {
     apellido: string;
 }
 
+// ─── Servicio ──────────────────────────────────────────────────────────────
+
 const authService = {
+
     /**
-     * Login con usuario/email y contraseña
+     * Login con usuario o email + contraseña
      * POST /api/auth/login
+     *
+     * El backend de Java usa JSON-B (Yasson) que serializa los getters
+     * como camelCase (idUsuario, idRol). Normalizamos ambos casos aquí.
      */
-    async login(creds: LoginRequest): Promise<LoginResponse> {
-        return apiClient.post<LoginResponse>(
+    async login(creds: LoginRequest): Promise<{
+        id_usuario: number;
+        id_rol: number;
+        usuario: string;
+        activo: boolean;
+        email: string | null;
+        nombre?: string | null;
+        apellido?: string | null;
+    }> {
+        const raw = await apiClient.post<LoginResponse>(
             API_CONFIG.ENDPOINTS.AUTH.LOGIN,
             creds
         );
+
+        // Normalizar: JSON-B puede devolver "idUsuario" o "id_usuario"
+        return {
+            id_usuario: raw.idUsuario ?? raw.id_usuario ?? 0,
+            id_rol:     raw.idRol     ?? raw.id_rol     ?? 4,
+            usuario:    raw.usuario,
+            activo:     raw.activo,
+            email:      raw.email ?? null,
+            nombre:     raw.nombre ?? null,
+            apellido:   raw.apellido ?? null,
+        };
     },
 
     /**
-     * Registro de nuevo cliente (auto-registro)
+     * Registro de nuevo cliente (auto-registro con validaciones)
      * POST /api/auth/registro
      */
     async registro(datos: RegistroRequest): Promise<{ mensaje: string; idUsuario: number }> {
@@ -77,7 +107,7 @@ const authService = {
     },
 
     /**
-     * Verificar cuenta con código de email
+     * Verificar cuenta con código enviado al correo
      * POST /api/auth/verificar
      */
     async verificarCuenta(email: string, codigo: string): Promise<{ mensaje: string }> {
@@ -85,7 +115,7 @@ const authService = {
     },
 
     /**
-     * Dashboard del administrador con stats reales
+     * Estadísticas reales del dashboard admin
      * GET /api/auth/admin/dashboard
      */
     async getAdminDashboard(): Promise<AdminDashboardResponse> {
@@ -97,11 +127,15 @@ const authService = {
      * GET /api/auth/admin/usuarios
      */
     async getUsuariosAdmin(): Promise<AdminUsuario[]> {
-        return apiClient.get(API_CONFIG.ENDPOINTS.AUTH.ADMIN_USUARIOS);
+        const data = await apiClient.get<AdminUsuario[] | any>(
+            API_CONFIG.ENDPOINTS.AUTH.ADMIN_USUARIOS
+        );
+        // El DAO devuelve JSON manual con "id" como clave
+        return Array.isArray(data) ? data : [];
     },
 
     /**
-     * Crear nuevo usuario desde el panel admin
+     * Crear usuario desde panel admin
      * POST /api/auth/admin/usuarios
      */
     async crearUsuarioAdmin(datos: CrearUsuarioAdminRequest): Promise<{ mensaje: string }> {
@@ -112,13 +146,16 @@ const authService = {
      * Editar usuario desde panel admin
      * PUT /api/auth/admin/usuarios/{id}
      */
-    async editarUsuarioAdmin(id: number, datos: Partial<CrearUsuarioAdminRequest>): Promise<{ mensaje: string }> {
+    async editarUsuarioAdmin(
+        id: number,
+        datos: Partial<CrearUsuarioAdminRequest>
+    ): Promise<{ mensaje: string }> {
         return apiClient.put(API_CONFIG.ENDPOINTS.AUTH.ADMIN_USUARIO_ID(id), datos);
     },
 
     /**
-     * Activar o desactivar usuario (borrado lógico)
-     * PUT /api/auth/admin/usuarios/{id}/estado?activo=true/false
+     * Activar / Desactivar usuario (borrado lógico)
+     * PUT /api/auth/admin/usuarios/{id}/estado?activo=true|false
      */
     async cambiarEstadoUsuario(id: number, activo: boolean): Promise<{ mensaje: string }> {
         const endpoint = `${API_CONFIG.ENDPOINTS.AUTH.ADMIN_USUARIO_ESTADO(id)}?activo=${activo}`;
@@ -126,14 +163,14 @@ const authService = {
     },
 
     /**
-     * Mapea el id_rol numérico al string de rol usado en el frontend
+     * Convierte id_rol numérico al string de rol usado en el frontend
      */
     mapRol(idRol: number): 'admin' | 'recepcionista' | 'entrenador' | 'cliente' {
         switch (idRol) {
-            case 1: return 'admin';
-            case 2: return 'recepcionista';
-            case 3: return 'entrenador';
-            case 4: return 'cliente';
+            case 1:  return 'admin';
+            case 2:  return 'recepcionista';
+            case 3:  return 'entrenador';
+            case 4:  return 'cliente';
             default: return 'cliente';
         }
     },

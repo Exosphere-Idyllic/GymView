@@ -1,162 +1,200 @@
 // app/(auth)/login.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
+    View, Text, TextInput, TouchableOpacity, StyleSheet,
+    Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/store/AuthContext';
 import Colors from '../../src/theme/colors';
+import apiClient from '../../src/services/api.client';
 
 export default function LoginScreen() {
-  const [usuario, setUsuario] = useState('');
-  const [contrasena, setContrasena] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPass, setShowPass] = useState(false);
+    const [usuario, setUsuario]       = useState('');
+    const [contrasena, setContrasena] = useState('');
+    const [isLoading, setIsLoading]   = useState(false);
+    const [showPass, setShowPass]     = useState(false);
+    const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
-  const { login } = useAuth();
-  const router = useRouter();
+    const { login } = useAuth();
+    const router    = useRouter();
 
-  const handleLogin = async () => {
-    if (!usuario.trim() || !contrasena.trim()) {
-      Alert.alert('Campos requeridos', 'Por favor completa usuario y contraseña');
-      return;
-    }
-    try {
-      setIsLoading(true);
-      await login({ usuario: usuario.trim(), contrasena });
-      router.replace('/(tabs)');
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Credenciales incorrectas');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    // Verificar que el servidor esté activo al montar la pantalla
+    useEffect(() => {
+        apiClient.ping().then(ok =>
+            setServerStatus(ok ? 'online' : 'offline')
+        );
+    }, []);
 
-  return (
-    <KeyboardAvoidingView style={styles.wrapper} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Logo / Header */}
-        <View style={styles.header}>
-          <Text style={styles.logoIcon}>⚡</Text>
-          <Text style={styles.logoText}>IRON FITNESS</Text>
-          <Text style={styles.subtitle}>Sistema de Gestión</Text>
-        </View>
+    const handleLogin = async () => {
+        if (!usuario.trim() || !contrasena.trim()) {
+            Alert.alert('Campos requeridos', 'Por favor completa usuario y contraseña');
+            return;
+        }
+        try {
+            setIsLoading(true);
+            await login({ usuario: usuario.trim(), contrasena });
+            router.replace('/(tabs)');
+        } catch (error: any) {
+            Alert.alert('Error de acceso', error.message || 'Credenciales incorrectas');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-        {/* Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Acceso al Sistema</Text>
+    const retryPing = () => {
+        setServerStatus('checking');
+        apiClient.ping().then(ok => setServerStatus(ok ? 'online' : 'offline'));
+    };
 
-          {/* Usuario */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Usuario</Text>
-            <View style={styles.inputRow}>
-              <Text style={styles.inputIcon}>👤</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ingresa tu usuario"
-                placeholderTextColor="#666"
-                value={usuario}
-                onChangeText={setUsuario}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-              />
-            </View>
-          </View>
+    return (
+        <KeyboardAvoidingView
+            style={styles.wrapper}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+            <ScrollView
+                contentContainerStyle={styles.scroll}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* Logo */}
+                <View style={styles.header}>
+                    <Text style={styles.logoIcon}>⚡</Text>
+                    <Text style={styles.logoText}>IRON FITNESS</Text>
+                    <Text style={styles.subtitle}>Sistema de Gestión</Text>
+                </View>
 
-          {/* Contraseña */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Contraseña</Text>
-            <View style={styles.inputRow}>
-              <Text style={styles.inputIcon}>🔒</Text>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                placeholder="Ingresa tu contraseña"
-                placeholderTextColor="#666"
-                value={contrasena}
-                onChangeText={setContrasena}
-                secureTextEntry={!showPass}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-                onSubmitEditing={handleLogin}
-              />
-              <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
-                <Text style={{ color: '#666' }}>{showPass ? '🙈' : '👁'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+                {/* Estado del servidor */}
+                <TouchableOpacity onPress={retryPing} style={styles.serverBadge}>
+                    {serverStatus === 'checking' ? (
+                        <>
+                            <ActivityIndicator size="small" color="#aaa" />
+                            <Text style={styles.serverText}>  Conectando con el servidor...</Text>
+                        </>
+                    ) : serverStatus === 'online' ? (
+                        <Text style={[styles.serverText, { color: Colors.success }]}>
+                            🟢 Servidor activo
+                        </Text>
+                    ) : (
+                        <Text style={[styles.serverText, { color: Colors.warning }]}>
+                            🟡 Servidor iniciando... (toca para reintentar)
+                        </Text>
+                    )}
+                </TouchableOpacity>
 
-          {/* Botón */}
-          <TouchableOpacity
-            style={[styles.btn, isLoading && styles.btnDisabled]}
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            {isLoading
-              ? <ActivityIndicator color={Colors.black} />
-              : <Text style={styles.btnText}>INGRESAR</Text>
-            }
-          </TouchableOpacity>
+                {/* Card */}
+                <View style={styles.card}>
+                    <Text style={styles.cardTitle}>Acceso al Sistema</Text>
 
-          {/* Demo hint */}
-          <View style={styles.demoBox}>
-            <Text style={styles.demoTitle}>👆 Usuarios de prueba</Text>
-            <Text style={styles.demoText}>admin / 1234 → Administrador</Text>
-            <Text style={styles.demoText}>recep / 1234 → Recepcionista</Text>
-            <Text style={styles.demoText}>coach / 1234 → Entrenador</Text>
-            <Text style={styles.demoText}>juan / 1234 → Cliente</Text>
-          </View>
-        </View>
+                    {/* Usuario */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Usuario</Text>
+                        <View style={styles.inputRow}>
+                            <Text style={styles.inputIcon}>👤</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Ingresa tu usuario"
+                                placeholderTextColor="#666"
+                                value={usuario}
+                                onChangeText={setUsuario}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                editable={!isLoading}
+                            />
+                        </View>
+                    </View>
 
-        <Text style={styles.footer}>Iron Fitness © 2026 – Quito, Ecuador</Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
+                    {/* Contraseña */}
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Contraseña</Text>
+                        <View style={styles.inputRow}>
+                            <Text style={styles.inputIcon}>🔒</Text>
+                            <TextInput
+                                style={[styles.input, { flex: 1 }]}
+                                placeholder="Ingresa tu contraseña"
+                                placeholderTextColor="#666"
+                                value={contrasena}
+                                onChangeText={setContrasena}
+                                secureTextEntry={!showPass}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                editable={!isLoading}
+                                onSubmitEditing={handleLogin}
+                            />
+                            <TouchableOpacity
+                                onPress={() => setShowPass(!showPass)}
+                                style={styles.eyeBtn}
+                            >
+                                <Text style={{ color: '#666' }}>{showPass ? '🙈' : '👁'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Botón */}
+                    <TouchableOpacity
+                        style={[styles.btn, isLoading && styles.btnDisabled]}
+                        onPress={handleLogin}
+                        disabled={isLoading}
+                    >
+                        {isLoading
+                            ? <ActivityIndicator color={Colors.black} />
+                            : <Text style={styles.btnText}>INGRESAR</Text>
+                        }
+                    </TouchableOpacity>
+
+                    {/* Hint usuarios reales */}
+                    <View style={styles.demoBox}>
+                        <Text style={styles.demoTitle}>👆 Usuarios del sistema</Text>
+                        <Text style={styles.demoText}>Usa las credenciales registradas en la base de datos.</Text>
+                        <Text style={[styles.demoText, { marginTop: 6, color: Colors.textMuted }]}>
+                            Sin conexión: admin/1234 · recep/1234 · coach/1234 · juan/1234
+                        </Text>
+                    </View>
+                </View>
+
+                <Text style={styles.footer}>Iron Fitness © 2026 – Quito, Ecuador</Text>
+            </ScrollView>
+        </KeyboardAvoidingView>
+    );
 }
 
 const styles = StyleSheet.create({
-  wrapper: { flex: 1, backgroundColor: Colors.background },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 40 },
-  header: { alignItems: 'center', marginBottom: 32 },
-  logoIcon: { fontSize: 56, marginBottom: 8 },
-  logoText: { fontSize: 28, fontWeight: 'bold', color: Colors.primary, letterSpacing: 2 },
-  subtitle: { fontSize: 14, color: Colors.textMuted, marginTop: 4 },
-  card: {
-    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
-    borderRadius: 16, padding: 24,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
-  },
-  cardTitle: { fontSize: 18, fontWeight: '600', color: Colors.textMuted, textAlign: 'center', marginBottom: 24 },
-  inputGroup: { marginBottom: 18 },
-  label: { fontSize: 13, color: '#aaa', marginBottom: 6, fontWeight: '500' },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#2c2c2c', borderWidth: 1, borderColor: '#444', borderRadius: 10, paddingHorizontal: 12,
-  },
-  inputIcon: { fontSize: 16, marginRight: 8 },
-  input: { flex: 1, color: Colors.text, paddingVertical: 14, fontSize: 15 },
-  eyeBtn: { padding: 8 },
-  btn: {
-    backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 16,
-    alignItems: 'center', marginTop: 8,
-  },
-  btnDisabled: { backgroundColor: '#555' },
-  btnText: { color: Colors.black, fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
-  demoBox: {
-    marginTop: 20, padding: 12, backgroundColor: '#1a1a1a',
-    borderRadius: 8, borderLeftWidth: 3, borderLeftColor: Colors.primary,
-  },
-  demoTitle: { color: Colors.primary, fontWeight: '600', marginBottom: 6, fontSize: 13 },
-  demoText: { color: '#888', fontSize: 12, marginBottom: 2 },
-  footer: { textAlign: 'center', color: '#555', fontSize: 12, marginTop: 24 },
-});
-
-const webStyles = Platform.OS === 'web' ? {
-    wrapper: {
-        maxWidth: 500,
-        alignSelf: 'center',
-        width: '100%',
+    wrapper:    { flex: 1, backgroundColor: Colors.background },
+    scroll:     { flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 40 },
+    header:     { alignItems: 'center', marginBottom: 20 },
+    logoIcon:   { fontSize: 56, marginBottom: 8 },
+    logoText:   { fontSize: 28, fontWeight: 'bold', color: Colors.primary, letterSpacing: 2 },
+    subtitle:   { fontSize: 14, color: Colors.textMuted, marginTop: 4 },
+    serverBadge:{
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: '#1a1a1a', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14,
+        marginBottom: 16, borderWidth: 1, borderColor: '#333',
     },
-} : {};
+    serverText: { color: '#aaa', fontSize: 13 },
+    card: {
+        backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+        borderRadius: 16, padding: 24,
+    },
+    cardTitle:  { fontSize: 18, fontWeight: '600', color: Colors.textMuted, textAlign: 'center', marginBottom: 24 },
+    inputGroup: { marginBottom: 18 },
+    label:      { fontSize: 13, color: '#aaa', marginBottom: 6, fontWeight: '500' },
+    inputRow:   {
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: '#2c2c2c', borderWidth: 1, borderColor: '#444', borderRadius: 10, paddingHorizontal: 12,
+    },
+    inputIcon:  { fontSize: 16, marginRight: 8 },
+    input:      { flex: 1, color: Colors.text, paddingVertical: 14, fontSize: 15 },
+    eyeBtn:     { padding: 8 },
+    btn:        {
+        backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 16,
+        alignItems: 'center', marginTop: 8,
+    },
+    btnDisabled:{ backgroundColor: '#555' },
+    btnText:    { color: Colors.black, fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
+    demoBox:    {
+        marginTop: 20, padding: 12, backgroundColor: '#1a1a1a',
+        borderRadius: 8, borderLeftWidth: 3, borderLeftColor: Colors.primary,
+    },
+    demoTitle:  { color: Colors.primary, fontWeight: '600', marginBottom: 6, fontSize: 13 },
+    demoText:   { color: '#888', fontSize: 12, marginBottom: 2 },
+    footer:     { textAlign: 'center', color: '#555', fontSize: 12, marginTop: 24 },
+});

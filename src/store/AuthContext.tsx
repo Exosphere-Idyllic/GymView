@@ -1,5 +1,5 @@
 // src/store/AuthContext.tsx
-// Estrategia: intenta API real → fallback a mock si falla
+// Estrategia: intenta API real → fallback a mock si es error de RED (no de credenciales)
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,7 +15,7 @@ export interface AuthUser {
     nombre_completo: string;
     id_rol: number;
     email?: string | null;
-    usandoMock?: boolean;   // Indicador de modo offline
+    usandoMock?: boolean;
 }
 
 interface AuthContextType {
@@ -27,6 +27,25 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// ─── Errores que provienen del backend (no de red) ────────────────────────────
+// Si el backend responde con estos mensajes, NO hacemos fallback a mock.
+const BACKEND_AUTH_ERRORS = [
+    'credenciales',
+    'verificada',
+    'no verificada',
+    'usuario',
+    'contraseña',
+    '401',
+    '403',
+    'incorrect',
+    'not found',
+];
+
+function isAuthError(message: string): boolean {
+    const lower = message.toLowerCase();
+    return BACKEND_AUTH_ERRORS.some(k => lower.includes(k));
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<AuthUser | null>(null);
@@ -43,24 +62,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const login = async (credentials: { usuario: string; contrasena: string }) => {
-        // ─── INTENTO 1: API REAL ───
+
+        // ─── INTENTO 1: API REAL ───────────────────────────────────────────────
         try {
+            console.log('[Auth] Intentando login con API real...');
             const response = await authService.login({
                 usuario: credentials.usuario,
                 contrasena: credentials.contrasena,
             });
 
             if (!response.activo) {
-                throw new Error('Cuenta no verificada. Revisa tu correo.');
+                // El backend respondió pero la cuenta no está verificada → NO ir a mock
+                throw new Error('Cuenta no verificada. Revisa tu correo y confirma tu cuenta.');
             }
 
             const authUser: AuthUser = {
                 id_usuario: response.id_usuario,
                 usuario: response.usuario,
                 rol: authService.mapRol(response.id_rol),
-                nombre_completo: [response.nombre, response.apellido]
-                    .filter(Boolean)
-                    .join(' ') || response.usuario,
+                nombre_completo:
+                    [response.nombre, response.apellido].filter(Boolean).join(' ') ||
+                    response.usuario,
                 id_rol: response.id_rol,
                 email: response.email,
                 usandoMock: false,
@@ -68,26 +90,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
             setUser(authUser);
-            console.log('✅ Login con API real exitoso. id_usuario:', authUser.id_usuario);
+            console.log(`[Auth] ✅ Login API real OK — usuario: ${authUser.usuario} | rol: ${authUser.rol} | id: ${authUser.id_usuario}`);
             return;
 
         } catch (apiError: any) {
-            console.warn('⚠️ API no disponible, intentando mock...', apiError.message);
+            const msg: string = apiError?.message || '';
+            console.warn('[Auth] API error:', msg);
 
-            // Si el error es de credenciales (no de red), relanzar
-            if (
-                apiError.message?.includes('Credenciales') ||
-                apiError.message?.includes('verificada') ||
-                apiError.message?.includes('401') ||
-                apiError.message?.includes('403')
-            ) {
-                throw apiError;
+            // Si el error vino del backend (credenciales malas, cuenta bloqueada, etc.)
+            // NO caemos al mock — relanzamos el error para que la UI lo muestre.
+            if (isAuthError(msg)) {
+                throw new Error(msg || 'Credenciales incorrectas');
             }
+
+            // Si es error de red / timeout → avisamos y caemos al mock
+            console.warn('[Auth] Error de red — usando modo MOCK (offline)');
         }
 
-        // ─── INTENTO 2: MOCK (fallback offline) ───
+        // ─── INTENTO 2: MOCK (solo si la API no responde por red) ─────────────
         const found = MOCK_USUARIOS.find(
-            (u) =>
+            u =>
                 u.usuario === credentials.usuario &&
                 u.contrasena === credentials.contrasena
         );
@@ -107,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser));
         setUser(mockUser);
-        console.log('ℹ️ Login en modo MOCK (API no disponible)');
+        console.log('[Auth] ℹ️ Login MOCK (sin conexión al servidor)');
     };
 
     const logout = async () => {
@@ -132,6 +154,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth(): AuthContextType {
     const ctx = useContext(AuthContext);
-    if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+    if (!ctx) throw new Error('useAuth debe usarse dentro de AuthProvider');
     return ctx;
 }
