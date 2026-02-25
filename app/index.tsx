@@ -11,35 +11,53 @@ export default function Index() {
     const [showSplash, setShowSplash] = useState(true);
 
     useEffect(() => {
-        // Mostrar splash por 1 segundo solo en web
+        // Mostrar splash brevemente
         if (Platform.OS === 'web') {
-            setTimeout(() => setShowSplash(false), 1000);
+            setTimeout(() => setShowSplash(false), 800);
         } else {
-            setShowSplash(false);
+            setTimeout(() => setShowSplash(false), 600);
         }
     }, []);
 
     useEffect(() => {
         if (!isLoading && !showSplash) {
             if (isAuthenticated) {
+                // Usuario ya logueado → Dashboard
                 router.replace('/(tabs)');
             } else {
-                router.replace('/(auth)/login');
+                // Usuario sin sesión
+                if (Platform.OS === 'web') {
+                    // WEB: Mostrar homepage pública
+                    router.replace('/(public)/homepage');
+                } else {
+                    // MOBILE: Ir directo al login
+                    router.replace('/(auth)/login');
+                }
             }
         }
     }, [isLoading, isAuthenticated, showSplash]);
 
-    if (showSplash && Platform.OS === 'web') {
+    // Splash screen con branding
+    if (showSplash) {
         return (
             <View style={styles.splashContainer}>
                 <Text style={styles.logo}>⚡</Text>
                 <Text style={styles.brandName}>IRON FITNESS</Text>
-                <Text style={styles.tagline}>Sistema de Gestión de Gimnasio</Text>
-                <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 30 }} />
+                <Text style={styles.tagline}>
+                    {Platform.OS === 'web'
+                        ? 'Sistema de Gestión de Gimnasio'
+                        : 'Tu Mejor Versión'}
+                </Text>
+                <ActivityIndicator
+                    size="large"
+                    color={Colors.primary}
+                    style={{ marginTop: 30 }}
+                />
             </View>
         );
     }
 
+    // Loader genérico (no debería verse en condiciones normales)
     return (
         <View style={styles.container}>
             <ActivityIndicator size="large" color={Colors.primary} />
