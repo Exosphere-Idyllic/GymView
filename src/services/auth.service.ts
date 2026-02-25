@@ -1,210 +1,142 @@
 // src/services/auth.service.ts
+// Conectado a: POST /api/auth/login  |  POST /api/auth/registro  |  POST /api/auth/verificar
 
 import apiClient from './api.client';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG } from '../config/api.config';
-import {
-    LoginCredentials,
-    AuthResponse,
-    Usuario,
-    ApiResponse,
-} from '../types/database.types';
 
-/**
- * Servicio de Autenticación
- * Implementa RF02 - Autenticación y Autorización
- */
-
-class AuthService {
-    /**
-     * Login de usuario
-     * POST /api/auth/login
-     */
-    async login(credentials: LoginCredentials): Promise<AuthResponse> {
-        try {
-            const response = await apiClient.post<ApiResponse<AuthResponse>>(
-                API_CONFIG.ENDPOINTS.AUTH.LOGIN,
-                credentials
-            );
-
-            if (response.success && response.data) {
-                // Guardar tokens en AsyncStorage
-                await this.saveAuthData(response.data);
-                return response.data;
-            }
-
-            throw new Error(response.message || 'Error en login');
-        } catch (error: any) {
-            console.error('Login error:', error);
-            throw new Error(
-                error.response?.data?.message || 'Credenciales inválidas'
-            );
-        }
-    }
-
-    /**
-     * Registro de nuevo usuario
-     * POST /api/auth/register
-     */
-    async register(userData: {
-        usuario: string;
-        contrasena: string;
-        email: string;
-        id_rol: number;
-    }): Promise<ApiResponse<Usuario>> {
-        try {
-            const response = await apiClient.post<ApiResponse<Usuario>>(
-                API_CONFIG.ENDPOINTS.AUTH.REGISTER,
-                userData
-            );
-            return response;
-        } catch (error: any) {
-            console.error('Register error:', error);
-            throw new Error(
-                error.response?.data?.message || 'Error al registrar usuario'
-            );
-        }
-    }
-
-    /**
-     * Logout - Limpiar tokens y datos locales
-     */
-    async logout(): Promise<void> {
-        try {
-            // Llamar endpoint de logout si existe
-            await apiClient.post(API_CONFIG.ENDPOINTS.AUTH.LOGOUT);
-        } catch (error) {
-            console.error('Logout API error:', error);
-        } finally {
-            // Limpiar storage local
-            await this.clearAuthData();
-        }
-    }
-
-    /**
-     * Refrescar token de acceso
-     */
-    async refreshToken(): Promise<string> {
-        const refreshToken = await AsyncStorage.getItem('refresh_token');
-
-        if (!refreshToken) {
-            throw new Error('No refresh token available');
-        }
-
-        const response = await apiClient.post<ApiResponse<{ access_token: string }>>(
-            API_CONFIG.ENDPOINTS.AUTH.REFRESH,
-            { refreshToken }
-        );
-
-        if (response.success && response.data) {
-            await AsyncStorage.setItem('access_token', response.data.access_token);
-            return response.data.access_token;
-        }
-
-        throw new Error('Failed to refresh token');
-    }
-
-    /**
-     * Verificar si el usuario está autenticado
-     */
-    async isAuthenticated(): Promise<boolean> {
-        const token = await AsyncStorage.getItem('access_token');
-        return !!token;
-    }
-
-    /**
-     * Obtener usuario actual desde storage
-     */
-    async getCurrentUser(): Promise<AuthResponse['user'] | null> {
-        try {
-            const userJson = await AsyncStorage.getItem('user');
-            return userJson ? JSON.parse(userJson) : null;
-        } catch (error) {
-            console.error('Get current user error:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Obtener token de acceso
-     */
-    async getAccessToken(): Promise<string | null> {
-        return await AsyncStorage.getItem('access_token');
-    }
-
-    /**
-     * Verificar código de verificación (2FA o email)
-     */
-    async verifyCode(
-        id_usuario: number,
-        codigo: string
-    ): Promise<ApiResponse<boolean>> {
-        return await apiClient.post<ApiResponse<boolean>>(
-            API_CONFIG.ENDPOINTS.AUTH.VERIFY_CODE,
-            { id_usuario, codigo }
-        );
-    }
-
-    /**
-     * Cambiar contraseña
-     */
-    async changePassword(
-        id_usuario: number,
-        contrasenaActual: string,
-        contrasenaNueva: string
-    ): Promise<ApiResponse<boolean>> {
-        return await apiClient.put<ApiResponse<boolean>>(
-            `/usuarios/${id_usuario}/password`,
-            { contrasenaActual, contrasenaNueva }
-        );
-    }
-
-    /**
-     * Solicitar restablecimiento de contraseña
-     */
-    async requestPasswordReset(email: string): Promise<ApiResponse<boolean>> {
-        return await apiClient.post<ApiResponse<boolean>>(
-            '/auth/request-reset',
-            { email }
-        );
-    }
-
-    /**
-     * Restablecer contraseña con código
-     */
-    async resetPassword(
-        codigo: string,
-        contrasenaNueva: string
-    ): Promise<ApiResponse<boolean>> {
-        return await apiClient.post<ApiResponse<boolean>>('/auth/reset-password', {
-            codigo,
-            contrasenaNueva,
-        });
-    }
-
-    // ==================== MÉTODOS PRIVADOS ====================
-
-    /**
-     * Guardar datos de autenticación en AsyncStorage
-     */
-    private async saveAuthData(authData: AuthResponse): Promise<void> {
-        await AsyncStorage.multiSet([
-            ['access_token', authData.access_token],
-            ['refresh_token', authData.refresh_token],
-            ['user', JSON.stringify(authData.user)],
-        ]);
-    }
-
-    /**
-     * Limpiar datos de autenticación
-     */
-    private async clearAuthData(): Promise<void> {
-        await AsyncStorage.multiRemove([
-            'access_token',
-            'refresh_token',
-            'user',
-        ]);
-    }
+export interface LoginRequest {
+    usuario: string;
+    contrasena: string;
 }
 
-export default new AuthService();
+// Respuesta real del backend: AuthController.java -> UsuarioDAO.login()
+export interface LoginResponse {
+    id_usuario: number;
+    id_rol: number;        // 1=admin, 2=recepcionista, 3=entrenador, 4=cliente
+    usuario: string;
+    activo: boolean;
+    email: string | null;
+    // Campos extra opcionales que puede devolver
+    nombre?: string;
+    apellido?: string;
+}
+
+export interface RegistroRequest {
+    nombre: string;
+    apellido: string;
+    cedula: string;
+    telefono: string;
+    email: string;
+    fechaNacimiento: string;   // "YYYY-MM-DD"
+    usuario: string;
+    contrasena: string;
+    idRol?: number;            // Default: 4 (cliente)
+}
+
+export interface AdminDashboardResponse {
+    totalClientes: number;
+    totalEntrenadores: number;
+    ingresos: number;
+}
+
+export interface AdminUsuario {
+    id: number;
+    usuario: string;
+    nombre: string;
+    apellido: string;
+    rol: string;
+    activo: boolean;
+}
+
+export interface CrearUsuarioAdminRequest {
+    idRol: number;
+    usuario: string;
+    contrasena: string;
+    nombre: string;
+    apellido: string;
+}
+
+const authService = {
+    /**
+     * Login con usuario/email y contraseña
+     * POST /api/auth/login
+     */
+    async login(creds: LoginRequest): Promise<LoginResponse> {
+        return apiClient.post<LoginResponse>(
+            API_CONFIG.ENDPOINTS.AUTH.LOGIN,
+            creds
+        );
+    },
+
+    /**
+     * Registro de nuevo cliente (auto-registro)
+     * POST /api/auth/registro
+     */
+    async registro(datos: RegistroRequest): Promise<{ mensaje: string; idUsuario: number }> {
+        return apiClient.post(API_CONFIG.ENDPOINTS.AUTH.REGISTRO, datos);
+    },
+
+    /**
+     * Verificar cuenta con código de email
+     * POST /api/auth/verificar
+     */
+    async verificarCuenta(email: string, codigo: string): Promise<{ mensaje: string }> {
+        return apiClient.post(API_CONFIG.ENDPOINTS.AUTH.VERIFICAR, { email, codigo });
+    },
+
+    /**
+     * Dashboard del administrador con stats reales
+     * GET /api/auth/admin/dashboard
+     */
+    async getAdminDashboard(): Promise<AdminDashboardResponse> {
+        return apiClient.get(API_CONFIG.ENDPOINTS.AUTH.ADMIN_DASHBOARD);
+    },
+
+    /**
+     * Lista de usuarios para el panel admin
+     * GET /api/auth/admin/usuarios
+     */
+    async getUsuariosAdmin(): Promise<AdminUsuario[]> {
+        return apiClient.get(API_CONFIG.ENDPOINTS.AUTH.ADMIN_USUARIOS);
+    },
+
+    /**
+     * Crear nuevo usuario desde el panel admin
+     * POST /api/auth/admin/usuarios
+     */
+    async crearUsuarioAdmin(datos: CrearUsuarioAdminRequest): Promise<{ mensaje: string }> {
+        return apiClient.post(API_CONFIG.ENDPOINTS.AUTH.ADMIN_USUARIOS, datos);
+    },
+
+    /**
+     * Editar usuario desde panel admin
+     * PUT /api/auth/admin/usuarios/{id}
+     */
+    async editarUsuarioAdmin(id: number, datos: Partial<CrearUsuarioAdminRequest>): Promise<{ mensaje: string }> {
+        return apiClient.put(API_CONFIG.ENDPOINTS.AUTH.ADMIN_USUARIO_ID(id), datos);
+    },
+
+    /**
+     * Activar o desactivar usuario (borrado lógico)
+     * PUT /api/auth/admin/usuarios/{id}/estado?activo=true/false
+     */
+    async cambiarEstadoUsuario(id: number, activo: boolean): Promise<{ mensaje: string }> {
+        const endpoint = `${API_CONFIG.ENDPOINTS.AUTH.ADMIN_USUARIO_ESTADO(id)}?activo=${activo}`;
+        return apiClient.put(endpoint);
+    },
+
+    /**
+     * Mapea el id_rol numérico al string de rol usado en el frontend
+     */
+    mapRol(idRol: number): 'admin' | 'recepcionista' | 'entrenador' | 'cliente' {
+        switch (idRol) {
+            case 1: return 'admin';
+            case 2: return 'recepcionista';
+            case 3: return 'entrenador';
+            case 4: return 'cliente';
+            default: return 'cliente';
+        }
+    },
+};
+
+export default authService;

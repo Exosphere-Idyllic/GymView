@@ -1,80 +1,42 @@
 // src/config/api.config.ts
-
-/**
- * Configuración central de la API
- * Ajusta estos valores según tu entorno
- */
+// API real de MathewLara alojada en Render
 
 export const API_CONFIG = {
-    // URLs por entorno
-    BASE_URL: __DEV__
-        ? 'http://localhost:8080/api'  // Desarrollo
-        : 'https://tu-backend-prod.com/api', // Producción
+    BASE_URL: 'https://gimnasio-f7td.onrender.com/Gimnasio/api',
+    TIMEOUT: 20000, // 20s - Render free tier tiene cold starts de ~30s
 
-    // Timeout en milisegundos
-    TIMEOUT: 10000,
-
-    // Headers por defecto
-    HEADERS: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-    },
-
-    // Configuración de reintentos
-    RETRY_CONFIG: {
-        maxRetries: 3,
-        retryDelay: 1000, // ms
-    },
-
-    // Endpoints
     ENDPOINTS: {
         AUTH: {
             LOGIN: '/auth/login',
-            REGISTER: '/auth/register',
-            LOGOUT: '/auth/logout',
-            REFRESH: '/auth/refresh',
-            VERIFY_CODE: '/auth/verify-code',
-        },
-        USUARIOS: {
-            BASE: '/usuarios',
-            BY_ID: (id: number) => `/usuarios/${id}`,
-            BY_ROLE: (role: string) => `/usuarios/role/${role}`,
+            REGISTRO: '/auth/registro',
+            VERIFICAR: '/auth/verificar',
+            ADMIN_DASHBOARD: '/auth/admin/dashboard',
+            ADMIN_USUARIOS: '/auth/admin/usuarios',
+            ADMIN_USUARIO_ID: (id: number) => `/auth/admin/usuarios/${id}`,
+            ADMIN_USUARIO_ESTADO: (id: number) => `/auth/admin/usuarios/${id}/estado`,
         },
         CLIENTES: {
-            BASE: '/clientes',
-            BY_ID: (id: number) => `/clientes/${id}`,
-            MEMBRESIAS: (id: number) => `/clientes/${id}/membresias`,
-            RUTINAS: (id: number) => `/clientes/${id}/rutinas`,
+            DASHBOARD: (idUsuario: number) => `/clientes/${idUsuario}/dashboard`,
+            COMPLETAR: (idUsuario: number) => `/clientes/${idUsuario}/completar`,
         },
         ENTRENADORES: {
-            BASE: '/entrenadores',
-            BY_ID: (id: number) => `/entrenadores/${id}`,
-            CLIENTES: (id: number) => `/entrenadores/${id}/clientes`,
-            RUTINAS: (id: number) => `/entrenadores/${id}/rutinas`,
+            DASHBOARD: (idUsuario: number) => `/entrenadores/${idUsuario}/dashboard`,
+            CREAR_RUTINA: (idUsuario: number) => `/entrenadores/${idUsuario}/crearRutina`,
+            AGENDA: (idUsuario: number) => `/entrenadores/${idUsuario}/agenda`,
+            RUTINA_ID: (idRutina: number) => `/entrenadores/rutinas/${idRutina}`,
+            RUTINA_REACTIVAR: (idRutina: number) => `/entrenadores/rutinas/${idRutina}/reactivar`,
         },
-        RUTINAS: {
-            BASE: '/rutinas',
-            BY_ID: (id: number) => `/rutinas/${id}`,
-            EJERCICIOS: (id: number) => `/rutinas/${id}/ejercicios`,
+        ACCESOS: {
+            ESCANEAR: (idUsuario: number) => `/accesos/escanear/${idUsuario}`,
         },
-        ASISTENCIA: {
-            BASE: '/asistencias',
-            VALIDATE_QR: '/asistencias/validate-qr',
-            BY_CLIENTE: (id: number) => `/asistencias/cliente/${id}`,
-            TODAY: '/asistencias/today',
+        PRODUCTOS: {
+            BASE: '/productos',
+            IMAGEN: (id: number) => `/productos/${id}/imagen`,
         },
-        PAGOS: {
-            BASE: '/pagos',
-            BY_ID: (id: number) => `/pagos/${id}`,
-            BY_CLIENTE: (id: number) => `/pagos/cliente/${id}`,
-            FACTURAS: (id: number) => `/pagos/${id}/facturas`,
+        VENTAS: {
+            BASE: '/ventas',
         },
-        REPORTES: {
-            ASISTENCIA: '/reportes/asistencia',
-            INGRESOS: '/reportes/ingresos',
-            MEMBRESIAS: '/reportes/membresias',
-            ENTRENADORES: '/reportes/entrenadores',
-        },
+        PRUEBA: '/prueba',
     },
 };
 
