@@ -1,9 +1,13 @@
 // app/(tabs)/perfil.tsx
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Alert } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Alert,
+  Modal, TextInput, ActivityIndicator,
+} from 'react-native';
 import { useAuth } from '../../src/store/AuthContext';
 import { useRouter } from 'expo-router';
 import Colors from '../../src/theme/colors';
+import usuariosService from '../../src/services/usuarios.service';
 
 const ROL_LABELS: Record<string, string> = {
   admin: 'Administrador',
@@ -20,8 +24,46 @@ const ROL_ICONS: Record<string, string> = {
 };
 
 export default function PerfilScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const router = useRouter();
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editNombre, setEditNombre] = useState('');
+  const [editApellido, setEditApellido] = useState('');
+  const [editContrasena, setEditContrasena] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const abrirEditar = () => {
+    const parts = (user?.nombre_completo || '').trim().split(/\s+/);
+    setEditNombre(parts[0] || '');
+    setEditApellido(parts.slice(1).join(' ') || '');
+    setEditContrasena('');
+    setModalVisible(true);
+  };
+
+  const guardarPerfil = async () => {
+    if (!user?.id_usuario) return;
+    const nombre = editNombre.trim();
+    const apellido = editApellido.trim();
+    if (!nombre) {
+      Alert.alert('Error', 'El nombre es obligatorio');
+      return;
+    }
+    setSaving(true);
+    try {
+      await usuariosService.actualizar(user.id_usuario, {
+        nombre: nombre || undefined,
+        apellido: apellido || undefined,
+        contrasena: editContrasena.trim() || undefined,
+      });
+      updateUser({ nombre_completo: [nombre, apellido].filter(Boolean).join(' ') });
+      setModalVisible(false);
+      Alert.alert('✅ Listo', 'Datos actualizados correctamente');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'No se pudo actualizar');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert('Cerrar Sesión', '¿Estás seguro que deseas salir?', [
@@ -81,17 +123,81 @@ export default function PerfilScreen() {
         </View>
 
         {/* API Status */}
-        <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: Colors.warning }]}>
-          <Text style={styles.cardTitle}>⚠️ Estado del Sistema</Text>
-          <Text style={styles.apiStatus}>Modo: <Text style={{ color: Colors.warning }}>MOCK / Sin API</Text></Text>
-          <Text style={styles.apiNote}>Todos los datos son de prueba. Cuando el backend esté disponible, conecta la URL en src/config/api.config.ts</Text>
+        <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: user?.usandoMock ? Colors.warning : Colors.success }]}>
+          <Text style={styles.cardTitle}>Estado del Sistema</Text>
+          <Text style={styles.apiStatus}>
+            {user?.usandoMock
+              ? <>Modo: <Text style={{ color: Colors.warning }}>Offline / Mock</Text></>
+              : <>Modo: <Text style={{ color: Colors.success }}>Conectado al API</Text></>}
+          </Text>
+          <Text style={styles.apiNote}>
+            {user?.usandoMock
+              ? 'Sin conexión al servidor. Los datos son de prueba.'
+              : 'Sesión activa con el servidor del gimnasio.'}
+          </Text>
         </View>
+
+        {/* Editar perfil (solo si estamos conectados al API) */}
+        {!user?.usandoMock && (
+          <TouchableOpacity style={[styles.card, styles.editarBtn]} onPress={abrirEditar}>
+            <Text style={styles.editarBtnText}>✏️ Editar mi perfil</Text>
+            <Text style={styles.apiNote}>Nombre, apellido y contraseña</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Logout */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutText}>🚪 Cerrar Sesión</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Modal Editar perfil */}
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Editar perfil</Text>
+            <View style={styles.field}>
+              <Text style={styles.label}>Nombre</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nombre"
+                placeholderTextColor="#666"
+                value={editNombre}
+                onChangeText={setEditNombre}
+              />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Apellido</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Apellido"
+                placeholderTextColor="#666"
+                value={editApellido}
+                onChangeText={setEditApellido}
+              />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Nueva contraseña (opcional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Dejar vacío para no cambiar"
+                placeholderTextColor="#666"
+                value={editContrasena}
+                onChangeText={setEditContrasena}
+                secureTextEntry
+              />
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={guardarPerfil} disabled={saving}>
+                {saving ? <ActivityIndicator color={Colors.black} size="small" /> : <Text style={styles.saveBtnText}>Guardar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -118,4 +224,17 @@ const styles = StyleSheet.create({
   apiNote: { color: Colors.textMuted, fontSize: 12, lineHeight: 18 },
   logoutBtn: { backgroundColor: Colors.danger, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
   logoutText: { color: Colors.white, fontWeight: '700', fontSize: 16 },
+  editarBtn: { borderLeftWidth: 4, borderLeftColor: Colors.primary },
+  editarBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 15, marginBottom: 4 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
+  modalCard: { backgroundColor: Colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+  modalTitle: { color: Colors.text, fontWeight: 'bold', fontSize: 18, marginBottom: 16, textAlign: 'center' },
+  field: { marginBottom: 14 },
+  label: { color: Colors.textMuted, fontSize: 13, marginBottom: 6 },
+  input: { backgroundColor: '#2c2c2c', borderWidth: 1, borderColor: '#444', borderRadius: 10, padding: 12, color: Colors.text, fontSize: 14 },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 20 },
+  cancelBtn: { flex: 1, borderWidth: 1, borderColor: '#555', borderRadius: 10, padding: 14, alignItems: 'center' },
+  cancelBtnText: { color: Colors.textMuted, fontWeight: '600' },
+  saveBtn: { flex: 1, backgroundColor: Colors.primary, borderRadius: 10, padding: 14, alignItems: 'center' },
+  saveBtnText: { color: Colors.black, fontWeight: '700', fontSize: 15 },
 });

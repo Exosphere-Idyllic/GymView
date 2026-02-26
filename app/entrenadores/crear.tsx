@@ -1,11 +1,15 @@
 // app/entrenadores/crear.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../../src/theme/colors';
+import { useAuth } from '../../src/store/AuthContext';
+import authService from '../../src/services/auth.service';
 
 export default function CrearEntrenador() {
     const router = useRouter();
+    const { user } = useAuth();
+    const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
         nombre: '',
         apellido: '',
@@ -15,22 +19,42 @@ export default function CrearEntrenador() {
         contrasena: '',
     });
 
-    const handleSave = () => {
-        if (!form.nombre || !form.apellido || !form.email) {
-            Alert.alert('Campos requeridos', 'Nombre, apellido y email son obligatorios');
+    const handleSave = async () => {
+        if (!form.nombre || !form.apellido || !form.usuario) {
+            Alert.alert('Campos requeridos', 'Nombre, apellido y usuario son obligatorios');
+            return;
+        }
+        if (!form.contrasena || form.contrasena.length < 4) {
+            Alert.alert('Contraseña', 'Mínimo 4 caracteres');
             return;
         }
 
-        if (!form.email.includes('@')) {
-            Alert.alert('Email inválido', 'Por favor ingresa un email válido');
-            return;
+        const esAdmin = user?.rol === 'admin';
+        if (esAdmin) {
+            setSaving(true);
+            try {
+                await authService.crearUsuarioAdmin({
+                    idRol: 3,
+                    usuario: form.usuario.trim(),
+                    contrasena: form.contrasena,
+                    nombre: form.nombre.trim(),
+                    apellido: form.apellido.trim(),
+                });
+                Alert.alert('✅ Entrenador creado', 'El usuario fue registrado correctamente. La especialidad se puede configurar en su perfil.', [
+                    { text: 'OK', onPress: () => router.back() }
+                ]);
+            } catch (e: any) {
+                Alert.alert('Error', e.message || 'No se pudo crear el entrenador');
+            } finally {
+                setSaving(false);
+            }
+        } else {
+            Alert.alert(
+                'Sin permiso',
+                'Solo un administrador puede crear entrenadores desde aquí.',
+                [{ text: 'OK', onPress: () => router.back() }]
+            );
         }
-
-        Alert.alert(
-            '✅ Guardado',
-            'Entrenador registrado (en modo mock). Se enviará al API cuando esté disponible.',
-            [{ text: 'OK', onPress: () => router.back() }]
-        );
     };
 
     const Field = ({ label, key, placeholder, keyboardType = 'default', secure = false, multiline = false }: any) => (
@@ -96,8 +120,8 @@ export default function CrearEntrenador() {
                 <Field label="Usuario" key="usuario" placeholder="Nombre de usuario" />
                 <Field label="Contraseña" key="contrasena" placeholder="Contraseña" secure={true} />
 
-                <TouchableOpacity style={styles.submitBtn} onPress={handleSave}>
-                    <Text style={styles.submitText}>REGISTRAR ENTRENADOR</Text>
+                <TouchableOpacity style={[styles.submitBtn, saving && styles.submitBtnDisabled]} onPress={handleSave} disabled={saving}>
+                    {saving ? <ActivityIndicator color={Colors.black} /> : <Text style={styles.submitText}>REGISTRAR ENTRENADOR</Text>}
                 </TouchableOpacity>
 
                 <View style={styles.infoBox}>
@@ -167,6 +191,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 20
     },
+    submitBtnDisabled: { backgroundColor: '#555', opacity: 0.8 },
     submitText: { color: Colors.black, fontWeight: '800', fontSize: 16 },
     infoBox: {
         backgroundColor: 'rgba(255,193,7,0.1)',

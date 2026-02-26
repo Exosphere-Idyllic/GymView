@@ -10,8 +10,9 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../../src/theme/colors';
-import apiClient from '../../src/services/api.client';
-import { API_CONFIG } from '../../src/config/api.config';
+import ventasService from '../../src/services/ventas.service';
+import productosService from '../../src/services/productos.service';
+import { useAuth } from '../../src/store/AuthContext';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 interface Producto {
@@ -37,6 +38,7 @@ type FiltroCategoria = 'todos' | 'venta' | 'uso';
 // ── Componente Principal ───────────────────────────────────────────────────────
 export default function CatalogoScreen() {
     const router = useRouter();
+    const { user } = useAuth();
     const { width } = useWindowDimensions();
     const isDesktop = width >= 992;
     const isTablet  = width >= 640;
@@ -55,7 +57,7 @@ export default function CatalogoScreen() {
         setLoading(true);
         setError(null);
         try {
-            const data = await apiClient.get<Producto[]>(API_CONFIG.ENDPOINTS.PRODUCTOS.BASE);
+            const data = await productosService.listar();
             setProductos(data);
             setFiltrados(data);
         } catch (e: any) {
@@ -90,7 +92,7 @@ export default function CatalogoScreen() {
 
     const agregarAlCarrito = (producto: Producto) => {
         const id = getId(producto);
-        const imagenUrl = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PRODUCTOS.IMAGEN(id)}`;
+        const imagenUrl = productosService.getImagenUrl(id);
 
         setCarrito(prev => {
             const idx = prev.findIndex(i => i.id === id);
@@ -124,8 +126,8 @@ export default function CatalogoScreen() {
         if (carrito.length === 0) return;
         setProcesandoPago(true);
         try {
-            await apiClient.post(API_CONFIG.ENDPOINTS.VENTAS.BASE, {
-                idUsuario: 0,
+            await ventasService.procesar({
+                idUsuario: user?.id_usuario ?? 0,
                 total: totalCarrito,
                 productos: carrito.map(i => ({ id: i.id, nombre: i.nombre, precio: i.precio, cantidad: i.cantidad })),
             });
@@ -226,7 +228,7 @@ export default function CatalogoScreen() {
                                 <View key={id} style={[styles.productCard, { width: cardWidth }]}>
                                     {/* Imagen */}
                                     <Image
-                                        source={{ uri: `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PRODUCTOS.IMAGEN(id)}` }}
+                                        source={{ uri: productosService.getImagenUrl(id) }}
                                         style={styles.productImg}
                                         defaultSource={{ uri: 'https://images.unsplash.com/photo-1593095948071-474c5cc2989d?w=400&q=80' }}
                                     />

@@ -24,6 +24,7 @@ interface AuthContextType {
     isLoading: boolean;
     login: (credentials: { usuario: string; contrasena: string }) => Promise<void>;
     logout: () => Promise<void>;
+    updateUser: (partial: Partial<AuthUser>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -137,6 +138,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
     };
 
+    const updateUser = async (partial: Partial<AuthUser>) => {
+        if (!user) return;
+        const next = { ...user, ...partial };
+        setUser(next);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    };
+
     return (
         <AuthContext.Provider
             value={{
@@ -145,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isLoading,
                 login,
                 logout,
+                updateUser,
             }}
         >
             {children}

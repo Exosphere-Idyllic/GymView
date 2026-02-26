@@ -1,24 +1,54 @@
 // app/clientes/crear.tsx
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../../src/theme/colors';
+import { useAuth } from '../../src/store/AuthContext';
+import authService from '../../src/services/auth.service';
 
 export default function CrearCliente() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     nombre: '', apellido: '', email: '', telefono: '',
     fecha_nacimiento: '', usuario: '', contrasena: '', plan: 'Plan Smart',
   });
 
-  const handleSave = () => {
-    if (!form.nombre || !form.email) {
-      Alert.alert('Campos requeridos', 'Nombre y email son obligatorios');
+  const handleSave = async () => {
+    if (!form.nombre || !form.usuario) {
+      Alert.alert('Campos requeridos', 'Nombre y usuario son obligatorios');
       return;
     }
-    Alert.alert('✅ Guardado', 'Cliente registrado (en modo mock). Se enviará al API cuando esté disponible.', [
-      { text: 'OK', onPress: () => router.back() }
-    ]);
+    if (!form.contrasena || form.contrasena.length < 4) {
+      Alert.alert('Contraseña', 'Mínimo 4 caracteres');
+      return;
+    }
+
+    const esAdmin = user?.rol === 'admin';
+    if (esAdmin) {
+      setSaving(true);
+      try {
+        await authService.crearUsuarioAdmin({
+          idRol: 4,
+          usuario: form.usuario.trim(),
+          contrasena: form.contrasena,
+          nombre: form.nombre.trim(),
+          apellido: form.apellido.trim(),
+        });
+        Alert.alert('✅ Cliente creado', 'El usuario fue registrado correctamente. Plan y contacto se pueden configurar después.', [
+          { text: 'OK', onPress: () => router.back() }
+        ]);
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'No se pudo crear el cliente');
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      Alert.alert('Sin permiso', 'Solo un administrador puede crear clientes desde aquí. Usa el registro público o contacta a un admin.', [
+        { text: 'OK', onPress: () => router.back() }
+      ]);
+    }
   };
 
   const Field = ({ label, key, placeholder, keyboardType = 'default', secure = false }: any) => (
@@ -71,8 +101,8 @@ export default function CrearCliente() {
         <Field label="Usuario" key="usuario" placeholder="Nombre de usuario" />
         <Field label="Contraseña" key="contrasena" placeholder="Contraseña" secure={true} />
 
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSave}>
-          <Text style={styles.submitText}>REGISTRAR CLIENTE</Text>
+        <TouchableOpacity style={[styles.submitBtn, saving && styles.submitBtnDisabled]} onPress={handleSave} disabled={saving}>
+          {saving ? <ActivityIndicator color={Colors.black} /> : <Text style={styles.submitText}>REGISTRAR CLIENTE</Text>}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -95,5 +125,6 @@ const styles = StyleSheet.create({
   planBtnText: { color: Colors.textMuted, fontSize: 13 },
   planBtnTextActive: { color: Colors.primary, fontWeight: '700' },
   submitBtn: { backgroundColor: Colors.primary, borderRadius: 12, padding: 18, alignItems: 'center', marginTop: 20 },
+  submitBtnDisabled: { backgroundColor: '#555', opacity: 0.8 },
   submitText: { color: Colors.black, fontWeight: '800', fontSize: 16 },
 });

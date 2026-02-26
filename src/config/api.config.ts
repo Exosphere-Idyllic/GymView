@@ -38,6 +38,10 @@ export const API_CONFIG = {
         VENTAS: {
             BASE: '/ventas',
         },
+        USUARIOS: {
+            BASE:   '/usuarios',
+            BY_ID:  (id: number) => `/usuarios/${id}`,
+        },
         PRUEBA: '/prueba',
     },
 };
