@@ -1,6 +1,6 @@
 // src/components/dashboards/DashboardCliente.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Image } from 'react-native';
 import Colors from '../../theme/colors';
 import { useAuth } from '../../store/AuthContext';
 import { useRouter } from 'expo-router';
@@ -120,6 +120,10 @@ export default function DashboardCliente() {
                         <Text style={[styles.tabLabel, activeTab === t.key && styles.tabLabelActive]}>{t.label}</Text>
                     </TouchableOpacity>
                 ))}
+                <TouchableOpacity style={styles.tab} onPress={() => router.push('/catalogo')}>
+                    <Text>🛒</Text>
+                    <Text style={styles.tabLabel}>Tienda Online</Text>
+                </TouchableOpacity>
             </ScrollView>
 
             <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 30 }}>
@@ -127,11 +131,17 @@ export default function DashboardCliente() {
                 {/* ─── INICIO ─── */}
                 {activeTab === 'inicio' && (
                     <>
-                        {/* Pase QR */}
+                        {/* Pase QR – imagen por URL (API pública QR) */}
                         <View style={styles.qrCard}>
                             <Text style={styles.qrTitle}>🎫 Pase de Acceso</Text>
                             <View style={styles.qrBox}>
-                                <Text style={{ fontSize: 64 }}>▣</Text>
+                                <Image
+                                    source={{
+                                        uri: `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent('IRON_' + (user?.id_usuario ?? 0))}`,
+                                    }}
+                                    style={styles.qrImage}
+                                    resizeMode="contain"
+                                />
                                 <Text style={{ color: '#333', fontSize: 11, marginTop: 4 }}>ID: {user?.id_usuario}</Text>
                             </View>
                             <Text style={styles.qrId}>
@@ -311,6 +321,7 @@ const styles = StyleSheet.create({
     qrCard: { backgroundColor: Colors.surface, borderTopWidth: 4, borderTopColor: Colors.primary, borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 14 },
     qrTitle: { color: Colors.text, fontWeight: '700', fontSize: 16, marginBottom: 12 },
     qrBox: { backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 10, alignItems: 'center' },
+    qrImage: { width: 160, height: 160 },
     qrId: { color: Colors.textMuted, fontSize: 13 },
     card: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 14, marginBottom: 12 },
     sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 12 },

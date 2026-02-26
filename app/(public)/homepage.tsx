@@ -40,10 +40,8 @@ export default function Homepage() {
                             <TouchableOpacity><Text style={styles.navLink}>Inicio</Text></TouchableOpacity>
                             <TouchableOpacity><Text style={styles.navLink}>Instalaciones</Text></TouchableOpacity>
                             <TouchableOpacity><Text style={styles.navLink}>Planes</Text></TouchableOpacity>
-                            <TouchableOpacity>
-                                <Text style={[styles.navLink, { color: Colors.primary, fontWeight: 'bold' }]}>
-                                    TIENDA
-                                </Text>
+                            <TouchableOpacity onPress={() => router.push('/catalogo')}>
+                                <Text style={[styles.navLink, { color: Colors.primary, fontWeight: 'bold' }]}>TIENDA</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.btnZonaSocios}
@@ -62,11 +60,12 @@ export default function Homepage() {
                 {/* Mobile Menu Dropdown */}
                 {!isDesktop && navOpen && (
                     <View style={styles.mobileMenu}>
-                        {['Inicio', 'Instalaciones', 'Planes', 'TIENDA'].map((item, i) => (
-                            <TouchableOpacity key={i} style={styles.mobileMenuItem}>
-                                <Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15 }]}>{item}</Text>
-                            </TouchableOpacity>
-                        ))}
+                        <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); }}><Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15 }]}>Inicio</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); }}><Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15 }]}>Instalaciones</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); }}><Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15 }]}>Planes</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); router.push('/catalogo'); }}>
+                            <Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15, color: Colors.primary, fontWeight: 'bold' }]}>TIENDA</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.btnZonaSocios, { marginTop: 8, alignSelf: 'flex-start' }]}
                             onPress={() => { setNavOpen(false); router.push('/(auth)/login'); }}
@@ -92,7 +91,10 @@ export default function Homepage() {
                     <Text style={[styles.heroSubtitle, { fontSize: isDesktop ? 20 : 15 }]}>
                         Maquinaria profesional, pesas libres y el mejor{'\n'}ambiente para superar tus metas.
                     </Text>
-                    <TouchableOpacity style={[styles.heroCTA, isDesktop && { paddingVertical: 18, paddingHorizontal: 48 }]}>
+                    <TouchableOpacity
+                        style={[styles.heroCTA, isDesktop && { paddingVertical: 18, paddingHorizontal: 48 }]}
+                        onPress={() => router.push('/(auth)/login')}
+                    >
                         <Text style={styles.heroCTAText}>INSCRÍBETE AHORA</Text>
                     </TouchableOpacity>
                 </View>
@@ -142,7 +144,7 @@ export default function Homepage() {
                             ].map((f, i) => (
                                 <Text key={i} style={styles.tiendaFeatureItem}>✅  {f}</Text>
                             ))}
-                            <TouchableOpacity style={styles.tiendaBtn}>
+                            <TouchableOpacity style={styles.tiendaBtn} onPress={() => router.push('/catalogo')}>
                                 <Text style={styles.tiendaBtnText}>IR A LA TIENDA →</Text>
                             </TouchableOpacity>
                         </View>
