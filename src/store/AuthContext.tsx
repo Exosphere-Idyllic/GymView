@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .then((data: string | null) => {
                 if (data) setUser(JSON.parse(data));
             })
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setIsLoading(false));
     }, []);
 
@@ -90,6 +90,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             };
 
             await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+            // Guardar el JWT para futuras peticiones
+            await AsyncStorage.setItem('gymview_token', response.token);
+
             setUser(authUser);
             console.log(`[Auth] ✅ Login API real OK — usuario: ${authUser.usuario} | rol: ${authUser.rol} | id: ${authUser.id_usuario}`);
             return;

@@ -11,19 +11,20 @@ export interface LoginRequest {
     contrasena: string;
 }
 
-// La respuesta real del backend (UsuarioDAO.login → AuthController.login)
-// El backend devuelve el objeto Usuario serializado con Yasson/JSON-B
+// El backend devuelve { token: string, usuario: { ... } }
 export interface LoginResponse {
-    idUsuario: number;      // JSON-B serializa "idUsuario" (camelCase del getter Java)
-    idRol: number;
-    usuario: string;
-    activo: boolean;
-    email: string | null;
-    nombre?: string | null;
-    apellido?: string | null;
-    // Aliases en minúsculas por si el servidor los devuelve así
-    id_usuario?: number;
-    id_rol?: number;
+    token: string;
+    usuario: {
+        idUsuario: number;
+        idRol: number;
+        usuario: string;
+        activo: boolean;
+        email: string | null;
+        nombre?: string | null;
+        apellido?: string | null;
+        id_usuario?: number;
+        id_rol?: number;
+    }
 }
 
 export interface RegistroRequest {
@@ -80,23 +81,28 @@ const authService = {
         email: string | null;
         nombre?: string | null;
         apellido?: string | null;
+        token: string;
     }> {
         const raw = await apiClient.post<LoginResponse>(
             API_CONFIG.ENDPOINTS.AUTH.LOGIN,
             creds
         );
 
+        const userData = raw.usuario;
+
         // Normalizar: JSON-B puede devolver "idUsuario" o "id_usuario"
         return {
-            id_usuario: raw.idUsuario ?? raw.id_usuario ?? 0,
-            id_rol:     raw.idRol     ?? raw.id_rol     ?? 4,
-            usuario:    raw.usuario,
-            activo:     raw.activo,
-            email:      raw.email ?? null,
-            nombre:     raw.nombre ?? null,
-            apellido:   raw.apellido ?? null,
+            id_usuario: userData.idUsuario ?? userData.id_usuario ?? 0,
+            id_rol: userData.idRol ?? userData.id_rol ?? 4,
+            usuario: userData.usuario,
+            activo: userData.activo,
+            email: userData.email ?? null,
+            nombre: userData.nombre ?? null,
+            apellido: userData.apellido ?? null,
+            token: raw.token,
         };
     },
+
 
     /**
      * Registro de nuevo cliente (auto-registro con validaciones)
@@ -167,10 +173,10 @@ const authService = {
      */
     mapRol(idRol: number): 'admin' | 'recepcionista' | 'entrenador' | 'cliente' {
         switch (idRol) {
-            case 1:  return 'admin';
-            case 2:  return 'recepcionista';
-            case 3:  return 'entrenador';
-            case 4:  return 'cliente';
+            case 1: return 'admin';
+            case 2: return 'recepcionista';
+            case 3: return 'entrenador';
+            case 4: return 'cliente';
             default: return 'cliente';
         }
     },

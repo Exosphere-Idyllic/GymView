@@ -2,6 +2,7 @@
 // Cliente HTTP usando fetch nativo — compatible con Expo Web y Mobile
 // Incluye: retry automático, detección de cold start de Render, logs de debug
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG } from '../config/api.config';
 
 const DEBUG = true; // Cambiar a false en producción
@@ -29,17 +30,26 @@ class ApiClient {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), this.timeout);
 
+        // Recuperar JWT del almacenamiento seguro
+        const token = await AsyncStorage.getItem('gymview_token');
+
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...(options.headers as Record<string, string>),
+        };
+
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
         log(`${options.method || 'GET'} ${url}`);
 
         try {
             const response = await fetch(url, {
                 ...options,
                 signal: controller.signal,
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    ...options.headers,
-                },
+                headers,
             });
 
             clearTimeout(timer);
@@ -120,10 +130,13 @@ class ApiClient {
      */
     async ping(): Promise<boolean> {
         try {
-            await this.get(API_CONFIG.ENDPOINTS.PRUEBA);
-            log('✅ Servidor activo');
+            const url = `${this.baseURL}${API_CONFIG.ENDPOINTS.PRUEBA}`;
+            const response = await fetch(url, { method: 'GET' });
+            // Cualquier respuesta del servidor (incluso 401) significa que el servidor está despierto
+            log(`✅ Servidor activo (respondió HTTP ${response.status})`);
             return true;
-        } catch {
+        } catch (err) {
+            // Error de red o timeout
             log('⚠️ Servidor no responde (cold start probable)');
             return false;
         }

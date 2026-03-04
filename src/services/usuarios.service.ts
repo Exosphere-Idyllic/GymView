@@ -26,6 +26,7 @@ export interface CrearUsuarioRequest {
 }
 
 export interface ActualizarUsuarioRequest {
+    id?: number;
     usuario?: string;
     contrasena?: string;
     nombre?: string;
@@ -61,10 +62,10 @@ const usuariosService = {
 
     /**
      * Actualizar usuario
-     * PUT /usuarios/{id} (o PUT / con id en body según backend)
+     * PUT /usuarios/ (con id en body según backend)
      */
     async actualizar(id: number, datos: ActualizarUsuarioRequest): Promise<{ mensaje: string }> {
-        return apiClient.put(API_CONFIG.ENDPOINTS.USUARIOS.BY_ID(id), datos);
+        return apiClient.put(API_CONFIG.ENDPOINTS.USUARIOS.BASE, { ...datos, id });
     },
 
     /**

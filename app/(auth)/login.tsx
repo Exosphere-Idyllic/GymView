@@ -10,14 +10,14 @@ import Colors from '../../src/theme/colors';
 import apiClient from '../../src/services/api.client';
 
 export default function LoginScreen() {
-    const [usuario, setUsuario]       = useState('');
+    const [usuario, setUsuario] = useState('');
     const [contrasena, setContrasena] = useState('');
-    const [isLoading, setIsLoading]   = useState(false);
-    const [showPass, setShowPass]     = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [showPass, setShowPass] = useState(false);
     const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
     const { login } = useAuth();
-    const router    = useRouter();
+    const router = useRouter();
 
     // Verificar que el servidor esté activo al montar la pantalla
     useEffect(() => {
@@ -141,6 +141,14 @@ export default function LoginScreen() {
                         }
                     </TouchableOpacity>
 
+                    {/* Helper text para registro */}
+                    <View style={styles.registerContainer}>
+                        <Text style={styles.registerText}>¿No tienes una cuenta? </Text>
+                        <TouchableOpacity onPress={() => router.push('/(auth)/registro')}>
+                            <Text style={styles.registerLink}>Regístrate aquí</Text>
+                        </TouchableOpacity>
+                    </View>
+
                     {/* Hint usuarios reales */}
                     <View style={styles.demoBox}>
                         <Text style={styles.demoTitle}>👆 Usuarios del sistema</Text>
@@ -158,13 +166,13 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-    wrapper:    { flex: 1, backgroundColor: Colors.background },
-    scroll:     { flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 40 },
-    header:     { alignItems: 'center', marginBottom: 20 },
-    logoIcon:   { fontSize: 56, marginBottom: 8 },
-    logoText:   { fontSize: 28, fontWeight: 'bold', color: Colors.primary, letterSpacing: 2 },
-    subtitle:   { fontSize: 14, color: Colors.textMuted, marginTop: 4 },
-    serverBadge:{
+    wrapper: { flex: 1, backgroundColor: Colors.background },
+    scroll: { flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 40 },
+    header: { alignItems: 'center', marginBottom: 20 },
+    logoIcon: { fontSize: 56, marginBottom: 8 },
+    logoText: { fontSize: 28, fontWeight: 'bold', color: Colors.primary, letterSpacing: 2 },
+    subtitle: { fontSize: 14, color: Colors.textMuted, marginTop: 4 },
+    serverBadge: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
         backgroundColor: '#1a1a1a', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14,
         marginBottom: 16, borderWidth: 1, borderColor: '#333',
@@ -174,27 +182,34 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
         borderRadius: 16, padding: 24,
     },
-    cardTitle:  { fontSize: 18, fontWeight: '600', color: Colors.textMuted, textAlign: 'center', marginBottom: 24 },
+    cardTitle: { fontSize: 18, fontWeight: '600', color: Colors.textMuted, textAlign: 'center', marginBottom: 24 },
     inputGroup: { marginBottom: 18 },
-    label:      { fontSize: 13, color: '#aaa', marginBottom: 6, fontWeight: '500' },
-    inputRow:   {
+    label: { fontSize: 13, color: '#aaa', marginBottom: 6, fontWeight: '500' },
+    inputRow: {
         flexDirection: 'row', alignItems: 'center',
         backgroundColor: '#2c2c2c', borderWidth: 1, borderColor: '#444', borderRadius: 10, paddingHorizontal: 12,
     },
-    inputIcon:  { fontSize: 16, marginRight: 8 },
-    input:      { flex: 1, color: Colors.text, paddingVertical: 14, fontSize: 15 },
-    eyeBtn:     { padding: 8 },
-    btn:        {
+    inputIcon: { fontSize: 16, marginRight: 8 },
+    input: { flex: 1, color: Colors.text, paddingVertical: 14, fontSize: 15 },
+    eyeBtn: { padding: 8 },
+    btn: {
         backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 16,
         alignItems: 'center', marginTop: 8,
     },
-    btnDisabled:{ backgroundColor: '#555' },
-    btnText:    { color: Colors.black, fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
-    demoBox:    {
+    btnDisabled: { backgroundColor: '#555' },
+    btnText: { color: Colors.black, fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
+    demoBox: {
         marginTop: 20, padding: 12, backgroundColor: '#1a1a1a',
         borderRadius: 8, borderLeftWidth: 3, borderLeftColor: Colors.primary,
     },
-    demoTitle:  { color: Colors.primary, fontWeight: '600', marginBottom: 6, fontSize: 13 },
-    demoText:   { color: '#888', fontSize: 12, marginBottom: 2 },
-    footer:     { textAlign: 'center', color: '#555', fontSize: 12, marginTop: 24 },
+    demoTitle: { color: Colors.primary, fontWeight: '600', marginBottom: 6, fontSize: 13 },
+    demoText: { color: '#888', fontSize: 12, marginBottom: 2 },
+    registerContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginTop: 20,
+    },
+    registerText: { color: '#aaa', fontSize: 14 },
+    registerLink: { color: Colors.primary, fontSize: 14, fontWeight: 'bold' },
+    footer: { textAlign: 'center', color: '#555', fontSize: 12, marginTop: 24 },
 });
