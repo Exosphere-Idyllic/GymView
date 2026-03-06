@@ -1,10 +1,11 @@
 // src/components/dashboards/DashboardCliente.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Image, Modal } from 'react-native';
 import Colors from '../../theme/colors';
 import { useAuth } from '../../store/AuthContext';
 import { useRouter } from 'expo-router';
 import clientesService, { ClienteDashboard } from '../../services/clientes.service';
+import membresiaService, { PLANES_MEMBRESIA } from '../../services/membresia.service';
 
 type Tab = 'inicio' | 'rutina' | 'membresia';
 
@@ -17,6 +18,10 @@ export default function DashboardCliente() {
     const [apiError, setApiError] = useState<string | null>(null);
     const { user, logout } = useAuth();
     const router = useRouter();
+
+    // ── Estado Modal Membresía ──────────────────────────────────
+    const [modalMembresia, setModalMembresia] = useState(false);
+    const [savingMembresia, setSavingMembresia] = useState(false);
 
     const cargarDashboard = useCallback(async () => {
         if (!user?.id_usuario) return;
@@ -76,6 +81,21 @@ export default function DashboardCliente() {
         setEjerciciosCompletados(prev =>
             prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
         );
+    };
+
+    const renovarMembresia = async (idPlan: number) => {
+        if (!user?.id_usuario) return;
+        setSavingMembresia(true);
+        try {
+            await membresiaService.asignar(user.id_usuario, idPlan);
+            Alert.alert('✅ Éxito', '¡Tu membresía ha sido renovada exitosamente!');
+            setModalMembresia(false);
+            cargarDashboard();
+        } catch (e: any) {
+            Alert.alert('Error', e.message);
+        } finally {
+            setSavingMembresia(false);
+        }
     };
 
     const tabs: { key: Tab; label: string; icon: string }[] = [
@@ -291,7 +311,7 @@ export default function DashboardCliente() {
                             </View>
                             <TouchableOpacity
                                 style={styles.renovarBtn}
-                                onPress={() => Alert.alert('Renovar Plan', 'Dirígete a recepción para renovar tu membresía.')}
+                                onPress={() => setModalMembresia(true)}
                             >
                                 <Text style={styles.renovarText}>💳 Renovar Plan</Text>
                             </TouchableOpacity>
@@ -299,6 +319,36 @@ export default function DashboardCliente() {
                     </View>
                 )}
             </ScrollView>
+
+            {/* ─── Modal Renovar Membresía ─── */}
+            <Modal visible={modalMembresia} animationType="slide" transparent onRequestClose={() => setModalMembresia(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <Text style={styles.modalTitle}>🎫 Elige tu Plan</Text>
+
+                        {PLANES_MEMBRESIA.map(plan => (
+                            <TouchableOpacity
+                                key={plan.id}
+                                style={{ backgroundColor: '#212529', padding: 14, borderRadius: 10, marginBottom: 10, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                                onPress={() => renovarMembresia(plan.id)}
+                                disabled={savingMembresia}
+                            >
+                                <View>
+                                    <Text style={{ color: Colors.text, fontSize: 16, fontWeight: '600' }}>{plan.nombre}</Text>
+                                    <Text style={{ color: Colors.textMuted, fontSize: 12, marginTop: 4 }}>{plan.dias} días de acceso continuo</Text>
+                                </View>
+                                <Text style={{ color: Colors.success, fontSize: 18, fontWeight: 'bold' }}>${plan.precio}</Text>
+                            </TouchableOpacity>
+                        ))}
+
+                        <View style={{ marginTop: 20 }}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalMembresia(false)}>
+                                <Text style={styles.cancelText}>Cancelar</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -353,4 +403,10 @@ const styles = StyleSheet.create({
     renovarText: { color: Colors.primary, fontWeight: '700', fontSize: 15 },
     badge: { borderRadius: 6, paddingVertical: 3, paddingHorizontal: 8 },
     badgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+    // Modal
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
+    modalCard: { backgroundColor: Colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+    modalTitle: { color: Colors.text, fontWeight: 'bold', fontSize: 18, marginBottom: 20, textAlign: 'center' },
+    cancelBtn: { backgroundColor: 'transparent', paddingVertical: 12, alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#444' },
+    cancelText: { color: Colors.textMuted, fontWeight: '600', fontSize: 14 },
 });

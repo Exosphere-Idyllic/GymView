@@ -52,6 +52,13 @@ export interface AdminUsuario {
     apellido: string;
     rol: string;
     activo: boolean;
+    idCliente?: number;       // id en tabla clientes (0 si no tiene perfil cliente)
+    membresia?: string;       // nombre del plan actual
+    fechaVencimiento?: string | null; // fecha de vencimiento de membresía
+    email?: string;
+    telefono?: string;
+    cedula?: string;
+    fechaNacimiento?: string;
 }
 
 export interface CrearUsuarioAdminRequest {
@@ -60,6 +67,10 @@ export interface CrearUsuarioAdminRequest {
     contrasena: string;
     nombre: string;
     apellido: string;
+    email?: string;
+    telefono?: string;
+    cedula?: string;
+    fechaNacimiento?: string;
 }
 
 // ─── Servicio ──────────────────────────────────────────────────────────────

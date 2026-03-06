@@ -1,14 +1,14 @@
 // src/components/dashboards/DashboardAdmin.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-    View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    SafeAreaView, ActivityIndicator, Alert, TextInput, Modal,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, TextInput, Alert, ActivityIndicator, Modal, Platform } from 'react-native';
 import Colors from '../../theme/colors';
-import { MOCK_CLIENTES, MOCK_PAGOS, MOCK_LOGS_ACCESO } from '../../services/mock/mockData';
 import { useAuth } from '../../store/AuthContext';
 import { useRouter } from 'expo-router';
 import authService, { AdminDashboardResponse, AdminUsuario } from '../../services/auth.service';
+import pagosService, { Pago } from '../../services/pagos.service';
+import membresiaService, { PLANES_MEMBRESIA } from '../../services/membresia.service';
+import apiClient from '../../services/api.client';
+import { API_CONFIG } from '../../config/api.config';
 
 type Tab = 'resumen' | 'clientes' | 'entrenadores' | 'pagos' | 'logs' | 'usuarios';
 
@@ -20,15 +20,29 @@ export default function DashboardAdmin() {
     // ── Estado API ─────────────────────────────────────────────
     const [stats, setStats] = useState<AdminDashboardResponse | null>(null);
     const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
+    const [clientes, setClientes] = useState<AdminUsuario[]>([]);
+    const [pagos, setPagos] = useState<Pago[]>([]);
+    const [logs, setLogs] = useState<any[]>([]);
     const [loadingStats, setLoadingStats] = useState(false);
     const [loadingUsuarios, setLoadingUsuarios] = useState(false);
+    const [loadingClientes, setLoadingClientes] = useState(false);
+    const [loadingPagos, setLoadingPagos] = useState(false);
+    const [loadingLogs, setLoadingLogs] = useState(false);
     const [apiError, setApiError] = useState<string | null>(null);
 
     // ── Estado Modal Crear/Editar usuario ──────────────────────
     const [modalVisible, setModalVisible] = useState(false);
     const [editingUser, setEditingUser] = useState<AdminUsuario | null>(null);
-    const [formUsuario, setFormUsuario] = useState({ nombre: '', apellido: '', usuario: '', contrasena: '', idRol: 4 });
+    const [formUsuario, setFormUsuario] = useState({
+        nombre: '', apellido: '', usuario: '', contrasena: '', idRol: 4,
+        email: '', telefono: '', cedula: '', fechaNacimiento: ''
+    });
     const [savingUser, setSavingUser] = useState(false);
+
+    // ── Estado Modal Membresía ──────────────────────────────────
+    const [modalMembresia, setModalMembresia] = useState(false);
+    const [clienteMembresia, setClienteMembresia] = useState<AdminUsuario | null>(null);
+    const [savingMembresia, setSavingMembresia] = useState(false);
 
     const tabs: { key: Tab; label: string; icon: string }[] = [
         { key: 'resumen', label: 'Resumen', icon: '📊' },
@@ -66,26 +80,72 @@ export default function DashboardAdmin() {
         }
     }, []);
 
-    useEffect(() => {
-        cargarStats();
+    const cargarClientes = useCallback(async () => {
+        setLoadingClientes(true);
+        try {
+            // Reutilizamos el endpoint de listado de usuarios filtrando rol cliente
+            const data = await authService.getUsuariosAdmin();
+            setClientes(data.filter(u => u.rol === 'Cliente'));
+        } catch (e: any) {
+            Alert.alert('Aviso', 'No se pudo cargar clientes.');
+        } finally {
+            setLoadingClientes(false);
+        }
+    }, []);
+
+    const cargarPagos = useCallback(async () => {
+        setLoadingPagos(true);
+        try {
+            const data = await pagosService.getAll();
+            setPagos(data);
+        } catch (e: any) {
+            // Si el endpoint aún no existe en el backend, mostramos lista vacía
+            setPagos([]);
+        } finally {
+            setLoadingPagos(false);
+        }
+    }, []);
+
+    const cargarLogs = useCallback(async () => {
+        setLoadingLogs(true);
+        try {
+            const data = await apiClient.get<any[]>(API_CONFIG.ENDPOINTS.LOGS.ACCESOS);
+            setLogs(Array.isArray(data) ? data : []);
+        } catch (e: any) {
+            setLogs([]);
+        } finally {
+            setLoadingLogs(false);
+        }
     }, []);
 
     useEffect(() => {
-        if (activeTab === 'usuarios') {
-            cargarUsuarios();
-        }
+        cargarStats();
+        cargarLogs();
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'usuarios') cargarUsuarios();
+        if (activeTab === 'clientes') cargarClientes();
+        if (activeTab === 'pagos') cargarPagos();
+        if (activeTab === 'logs') cargarLogs();
     }, [activeTab]);
 
     // ── Acciones usuario ───────────────────────────────────────
     const abrirModalCrear = () => {
         setEditingUser(null);
-        setFormUsuario({ nombre: '', apellido: '', usuario: '', contrasena: '', idRol: 4 });
+        setFormUsuario({
+            nombre: '', apellido: '', usuario: '', contrasena: '', idRol: 4,
+            email: '', telefono: '', cedula: '', fechaNacimiento: ''
+        });
         setModalVisible(true);
     };
 
     const abrirModalEditar = (u: AdminUsuario) => {
         setEditingUser(u);
-        setFormUsuario({ nombre: u.nombre, apellido: u.apellido, usuario: u.usuario, contrasena: '', idRol: rolNameToId(u.rol) });
+        setFormUsuario({
+            nombre: u.nombre, apellido: u.apellido, usuario: u.usuario, contrasena: '', idRol: rolNameToId(u.rol),
+            email: u.email || '', telefono: u.telefono || '', cedula: u.cedula || '', fechaNacimiento: u.fechaNacimiento?.split('T')[0] || ''
+        });
         setModalVisible(true);
     };
 
@@ -118,29 +178,89 @@ export default function DashboardAdmin() {
     };
 
     const cambiarEstado = async (u: AdminUsuario) => {
-        Alert.alert(
-            u.activo ? 'Desactivar usuario' : 'Activar usuario',
-            `¿Estás seguro de ${u.activo ? 'desactivar' : 'activar'} a ${u.usuario}?`,
-            [
+        const title = u.activo ? 'Desactivar usuario' : 'Activar usuario';
+        const msg = `¿Estás seguro de ${u.activo ? 'desactivar' : 'activar'} a ${u.usuario}?`;
+
+        const doAction = async () => {
+            try {
+                await authService.cambiarEstadoUsuario(u.id, !u.activo);
+                if (activeTab === 'usuarios') cargarUsuarios();
+                else if (activeTab === 'clientes') cargarClientes();
+            } catch (e: any) {
+                Alert.alert('Error', e.message);
+            }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(msg)) {
+                doAction();
+            }
+        } else {
+            Alert.alert(title, msg, [
                 { text: 'Cancelar', style: 'cancel' },
-                {
-                    text: 'Confirmar',
-                    onPress: async () => {
-                        try {
-                            await authService.cambiarEstadoUsuario(u.id, !u.activo);
-                            cargarUsuarios();
-                        } catch (e: any) {
-                            Alert.alert('Error', e.message);
-                        }
-                    }
-                }
-            ]
-        );
+                { text: 'Confirmar', onPress: doAction }
+            ]);
+        }
     };
 
     const handleLogout = async () => {
         await logout();
         router.replace('/(auth)/login');
+    };
+
+    // ── Asignar membresía ──────────────────────────────────────
+    const abrirModalMembresia = (c: AdminUsuario) => {
+        setClienteMembresia(c);
+        setModalMembresia(true);
+    };
+
+    const asignarMembresia = async (idTipoMembresia: number) => {
+        if (!clienteMembresia || !clienteMembresia.id) {
+            Alert.alert('Error', 'Este usuario no tiene perfil de cliente aún.');
+            return;
+        }
+        setSavingMembresia(true);
+        try {
+            await membresiaService.asignar(clienteMembresia.id, idTipoMembresia);
+            const plan = PLANES_MEMBRESIA.find(p => p.id === idTipoMembresia);
+            Alert.alert('✅ Membresía asignada', `Plan ${plan?.nombre ?? ''} activado.El pago se registró automáticamente.`);
+            setModalMembresia(false);
+            cargarClientes(); // Refrescar lista para ver la nueva membresía
+        } catch (e: any) {
+            Alert.alert('Error', e.message || 'No se pudo asignar la membresía');
+        } finally {
+            setSavingMembresia(false);
+        }
+    };
+
+    const cancelarMembresia = (c: AdminUsuario) => {
+        if (!c.id || !c.membresia) {
+            Alert.alert('Aviso', 'Este cliente no tiene una membresía activa.');
+            return;
+        }
+
+        const msg = `¿Estás seguro de cancelar la membresía "${c.membresia}" de ${c.nombre}?`;
+
+        const doCancel = async () => {
+            try {
+                await membresiaService.cancelar(c.id);
+                Alert.alert('✅ Éxito', 'Membresía cancelada correctamente.');
+                cargarClientes();
+            } catch (e: any) {
+                Alert.alert('Error', e.message || 'No se pudo cancelar la membresía.');
+            }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(msg)) {
+                doCancel();
+            }
+        } else {
+            Alert.alert('Cancelar Membresía', msg, [
+                { text: 'Volver', style: 'cancel' },
+                { text: 'Sí, cancelar', style: 'destructive', onPress: doCancel }
+            ]);
+        }
     };
 
     const rolNameToId = (rolName: string): number => {
@@ -159,8 +279,8 @@ export default function DashboardAdmin() {
     const statCards = [
         { label: 'Total Clientes', value: stats?.totalClientes ?? '…', icon: '👥', color: Colors.primary },
         { label: 'Entrenadores', value: stats?.totalEntrenadores ?? '…', icon: '🏋️', color: '#0dcaf0' },
-        { label: 'Ingresos Totales', value: stats ? `$${Number(stats.ingresos).toFixed(2)}` : '…', icon: '💵', color: Colors.success },
-        { label: 'Membresías Vencidas', value: MOCK_CLIENTES.filter(c => c.estadoMembresia === 'Vencida').length, icon: '⚠️', color: Colors.danger },
+        { label: 'Ingresos Totales', value: stats ? `$${Number(stats.ingresos).toFixed(2)} ` : '…', icon: '💵', color: Colors.success },
+        { label: 'Usuarios Inactivos', value: usuarios.filter(u => !u.activo).length, icon: '⚠️', color: Colors.danger },
     ];
 
     return (
@@ -200,12 +320,12 @@ export default function DashboardAdmin() {
                                 <Text style={styles.loadingText}>Cargando datos reales...</Text>
                             </View>
                         )}
-                        {apiError && (
+                        {apiError ? (
                             <View style={styles.warnBox}>
                                 <Text style={styles.warnText}>⚠️ {apiError} — mostrando datos de respaldo</Text>
                                 <TouchableOpacity onPress={cargarStats}><Text style={{ color: Colors.primary, fontSize: 12, marginTop: 4 }}>🔄 Reintentar</Text></TouchableOpacity>
                             </View>
-                        )}
+                        ) : null}
                         <View style={styles.statsGrid}>
                             {statCards.map((s, i) => (
                                 <View key={i} style={[styles.statCard, { borderLeftColor: s.color }]}>
@@ -217,14 +337,18 @@ export default function DashboardAdmin() {
                         </View>
 
                         <Text style={styles.sectionTitle}>Últimos Accesos al Sistema</Text>
-                        {MOCK_LOGS_ACCESO.slice(0, 4).map(log => (
-                            <View key={log.id_log} style={styles.logRow}>
-                                <View style={styles.logAvatar}><Text style={styles.logAvatarText}>{log.usuario.substring(0, 2).toUpperCase()}</Text></View>
+                        {logs.slice(0, 4).map((log, i) => (
+                            <View key={log.idLog ?? i} style={styles.logRow}>
+                                <View style={styles.logAvatar}><Text style={styles.logAvatarText}>{(log.usuario ?? '??').substring(0, 2).toUpperCase()}</Text></View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.logUser}>{log.usuario} <Text style={styles.logRol}>({log.rol})</Text></Text>
-                                    <Text style={styles.logDetail}>{log.ip_acceso} · {log.tipo_dispositivo}</Text>
+                                    <Text style={styles.logDetail}>{log.exitoso ? '✅ Exitoso' : '❌ Fallido'}</Text>
                                 </View>
-                                <Text style={styles.logTime}>{new Date(log.fecha_hora_acceso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</Text>
+                                {log.fechaHora ? (
+                                    <Text style={styles.logTime}>
+                                        {new Date(log.fechaHora).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                ) : null}
                             </View>
                         ))}
                     </>
@@ -291,28 +415,59 @@ export default function DashboardAdmin() {
                     <>
                         <View style={styles.sectionHeader}>
                             <Text style={styles.sectionTitle}>Gestión de Clientes</Text>
-                            <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/clientes/crear')}>
-                                <Text style={styles.addBtnText}>+ Nuevo</Text>
-                            </TouchableOpacity>
                         </View>
-                        {MOCK_CLIENTES.map(c => (
-                            <TouchableOpacity key={c.id_cliente} style={styles.card} onPress={() => router.push(`/clientes/${c.id_cliente}`)}>
-                                <View style={styles.cardRow}>
-                                    <View style={styles.avatar}><Text style={styles.avatarText}>{c.nombre[0]}</Text></View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.cardName}>{c.nombre} {c.apellido}</Text>
-                                        <Text style={styles.cardSub}>{c.email}</Text>
+                        {loadingClientes ? (
+                            <View style={styles.loadingRow}>
+                                <ActivityIndicator color={Colors.primary} />
+                                <Text style={styles.loadingText}>Cargando clientes...</Text>
+                            </View>
+                        ) : clientes.length === 0 ? (
+                            <View style={styles.emptyBox}>
+                                <Text style={styles.emptyText}>No hay clientes registrados</Text>
+                                <TouchableOpacity onPress={cargarClientes}><Text style={{ color: Colors.primary, marginTop: 8 }}>🔄 Recargar</Text></TouchableOpacity>
+                            </View>
+                        ) : (
+                            clientes.map(c => (
+                                <View key={c.id} style={styles.card}>
+                                    <View style={styles.cardRow}>
+                                        <View style={[styles.avatar, { backgroundColor: c.activo ? Colors.primary : '#555' }]}>
+                                            <Text style={styles.avatarText}>{(c.nombre ?? '?')[0]}</Text>
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.cardName}>{c.nombre} {c.apellido}</Text>
+                                            <Text style={styles.cardSub}>@{c.usuario}</Text>
+                                            {c.membresia ? (
+                                                <Text style={{ color: Colors.primary, fontSize: 11, marginTop: 2 }}>
+                                                    📋 {c.membresia}{c.fechaVencimiento ? ` · Vence: ${c.fechaVencimiento} ` : null}
+                                                </Text>
+                                            ) : (
+                                                <Text style={{ color: Colors.danger, fontSize: 11, marginTop: 2 }}>⚠️ Sin membresía activa</Text>
+                                            )}
+                                        </View>
+                                        <View style={[styles.estadoBadge, { backgroundColor: c.activo ? Colors.success : Colors.danger }]}>
+                                            <Text style={styles.badgeText}>{c.activo ? '✅ Activo' : '❌ Inactivo'}</Text>
+                                        </View>
                                     </View>
-                                    <View style={[styles.badge, { backgroundColor: c.estadoMembresia === 'Activa' ? Colors.success : Colors.danger }]}>
-                                        <Text style={styles.badgeText}>{c.estadoMembresia}</Text>
+                                    <View style={styles.cardFooter}>
+                                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                                            <TouchableOpacity onPress={() => abrirModalMembresia(c)}>
+                                                <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: '600' }}>🎫 Asignar</Text>
+                                            </TouchableOpacity>
+                                            {c.membresia ? (
+                                                <TouchableOpacity onPress={() => cancelarMembresia(c)}>
+                                                    <Text style={{ color: Colors.warning, fontSize: 13, fontWeight: '600' }}>❌ Cancelar Mem.</Text>
+                                                </TouchableOpacity>
+                                            ) : null}
+                                        </View>
+                                        <TouchableOpacity onPress={() => cambiarEstado(c)}>
+                                            <Text style={{ color: c.activo ? Colors.danger : Colors.success, fontSize: 13, fontWeight: '600' }}>
+                                                {c.activo ? '🚫 Desactivar' : '✅ Activar'}
+                                            </Text>
+                                        </TouchableOpacity>
                                     </View>
                                 </View>
-                                <View style={styles.cardFooter}>
-                                    <Text style={styles.cardFooterText}>📋 {c.nombrePlan}</Text>
-                                    <Text style={styles.cardFooterText}>📅 Vence: {c.fecha_vencimiento}</Text>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
+                            ))
+                        )}
                     </>
                 )}
 
@@ -320,46 +475,69 @@ export default function DashboardAdmin() {
                 {activeTab === 'pagos' && (
                     <>
                         <Text style={styles.sectionTitle}>Historial de Pagos</Text>
-                        <View style={[styles.statCard, { borderLeftColor: Colors.success, marginBottom: 16 }]}>
-                            <Text style={styles.statLabel}>Total Recaudado</Text>
-                            <Text style={[styles.statValue, { color: Colors.success }]}>
-                                ${MOCK_PAGOS.reduce((a, p) => a + p.monto, 0).toFixed(2)}
-                            </Text>
-                        </View>
-                        {MOCK_PAGOS.map(p => {
-                            const cliente = MOCK_CLIENTES.find(c => c.id_cliente === p.id_cliente);
-                            return (
-                                <View key={p.id_pago} style={styles.card}>
-                                    <View style={styles.cardRow}>
-                                        <View>
-                                            <Text style={styles.cardName}>{cliente?.nombre} {cliente?.apellido}</Text>
-                                            <Text style={styles.cardSub}>{p.metodo_pago} · {p.fecha_pago}</Text>
-                                        </View>
-                                        <Text style={[styles.statValue, { color: Colors.success, fontSize: 20 }]}>${p.monto}</Text>
-                                    </View>
-                                    {p.observaciones ? <Text style={styles.logDetail}>📝 {p.observaciones}</Text> : null}
+                        {loadingPagos ? (
+                            <View style={styles.loadingRow}>
+                                <ActivityIndicator color={Colors.primary} />
+                                <Text style={styles.loadingText}>Cargando pagos...</Text>
+                            </View>
+                        ) : pagos.length === 0 ? (
+                            <View style={styles.emptyBox}>
+                                <Text style={styles.emptyText}>No hay pagos registrados</Text>
+                                <TouchableOpacity onPress={cargarPagos}><Text style={{ color: Colors.primary, marginTop: 8 }}>🔄 Recargar</Text></TouchableOpacity>
+                            </View>
+                        ) : (
+                            <>
+                                <View style={[styles.statCard, { borderLeftColor: Colors.success, marginBottom: 16 }]}>
+                                    <Text style={styles.statLabel}>Total Recaudado</Text>
+                                    <Text style={[styles.statValue, { color: Colors.success }]}>
+                                        ${pagos.reduce((a, p) => a + (p.monto ?? 0), 0).toFixed(2)}
+                                    </Text>
                                 </View>
-                            );
-                        })}
+                                {pagos.map((p, i) => (
+                                    <View key={p.idPago ?? i} style={styles.card}>
+                                        <View style={styles.cardRow}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.cardName}>{p.nombreCliente} {p.apellidoCliente}</Text>
+                                                <Text style={styles.cardSub}>{p.metodoPago ?? 'Pago'} · {p.fechaPago?.substring(0, 10)}</Text>
+                                            </View>
+                                            <Text style={[styles.statValue, { color: Colors.success, fontSize: 20 }]}>${p.monto}</Text>
+                                        </View>
+                                        {p.observaciones ? <Text style={styles.logDetail}>📝 {p.observaciones}</Text> : null}
+                                    </View>
+                                ))}
+                            </>
+                        )}
                     </>
                 )}
 
                 {/* ─── LOGS ─── */}
                 {activeTab === 'logs' && (
                     <>
-                        <Text style={styles.sectionTitle}>Registro de Accesos (RF09)</Text>
-                        {MOCK_LOGS_ACCESO.map(log => (
-                            <View key={log.id_log} style={styles.card}>
-                                <View style={styles.cardRow}>
-                                    <View style={styles.logAvatar}><Text style={styles.logAvatarText}>{log.usuario.substring(0, 2).toUpperCase()}</Text></View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.cardName}>{log.usuario} <Text style={{ color: Colors.primary }}>({log.rol})</Text></Text>
-                                        <Text style={styles.cardSub}>IP: {log.ip_acceso} · {log.tipo_dispositivo}</Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.logDetail}>🕐 {new Date(log.fecha_hora_acceso).toLocaleString('es')}</Text>
+                        <Text style={styles.sectionTitle}>Registro de Accesos</Text>
+                        {loadingLogs ? (
+                            <View style={styles.loadingRow}>
+                                <ActivityIndicator color={Colors.primary} />
+                                <Text style={styles.loadingText}>Cargando accesos...</Text>
                             </View>
-                        ))}
+                        ) : logs.length === 0 ? (
+                            <View style={styles.emptyBox}>
+                                <Text style={styles.emptyText}>No hay registros de acceso</Text>
+                                <TouchableOpacity onPress={cargarLogs}><Text style={{ color: Colors.primary, marginTop: 8 }}>🔄 Recargar</Text></TouchableOpacity>
+                            </View>
+                        ) : (
+                            logs.map((log, i) => (
+                                <View key={log.idLog ?? i} style={styles.card}>
+                                    <View style={styles.cardRow}>
+                                        <View style={styles.logAvatar}><Text style={styles.logAvatarText}>{(log.usuario ?? '??').substring(0, 2).toUpperCase()}</Text></View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.cardName}>{log.usuario} <Text style={{ color: Colors.primary }}>({log.rol ?? 'usuario'})</Text></Text>
+                                            <Text style={styles.cardSub}>{log.exitoso ? '✅ Exitoso' : '❌ Fallido'}</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={styles.logDetail}>🕐 {log.fechaHora ? new Date(log.fechaHora).toLocaleString('es') : 'Fecha no disponible'}</Text>
+                                </View>
+                            ))
+                        )}
                     </>
                 )}
             </ScrollView>
@@ -375,6 +553,10 @@ export default function DashboardAdmin() {
                             { label: 'Apellido', key: 'apellido', placeholder: 'Ej: Mendoza' },
                             { label: 'Usuario', key: 'usuario', placeholder: 'Ej: carlos123' },
                             { label: 'Contraseña', key: 'contrasena', placeholder: editingUser ? 'Dejar vacío para no cambiar' : 'Contraseña', secure: true },
+                            { label: 'Email', key: 'email', placeholder: 'Ej: carlos@gmail.com' },
+                            { label: 'Teléfono', key: 'telefono', placeholder: 'Ej: 0991234567' },
+                            { label: 'Cédula', key: 'cedula', placeholder: 'Cédula de Identidad' },
+                            { label: 'Fecha Nacimiento', key: 'fechaNacimiento', placeholder: 'YYYY-MM-DD' },
                         ].map(field => (
                             <View key={field.key} style={styles.fieldGroup}>
                                 <Text style={styles.fieldLabel}>{field.label}</Text>
@@ -414,6 +596,36 @@ export default function DashboardAdmin() {
                                     ? <ActivityIndicator color={Colors.black} size="small" />
                                     : <Text style={styles.saveBtnText}>Guardar</Text>
                                 }
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ─── Modal Asignar Membresía ─── */}
+            <Modal visible={modalMembresia} animationType="slide" transparent onRequestClose={() => setModalMembresia(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <Text style={styles.modalTitle}>🎫 Membresía para {clienteMembresia?.nombre}</Text>
+
+                        {PLANES_MEMBRESIA.map(plan => (
+                            <TouchableOpacity
+                                key={plan.id}
+                                style={{ backgroundColor: '#212529', padding: 14, borderRadius: 10, marginBottom: 10, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                                onPress={() => asignarMembresia(plan.id)}
+                                disabled={savingMembresia}
+                            >
+                                <View>
+                                    <Text style={{ color: Colors.text, fontSize: 16, fontWeight: '600' }}>{plan.nombre}</Text>
+                                    <Text style={{ color: Colors.textMuted, fontSize: 12, marginTop: 4 }}>{plan.dias} días</Text>
+                                </View>
+                                <Text style={{ color: Colors.success, fontSize: 18, fontWeight: 'bold' }}>${plan.precio}</Text>
+                            </TouchableOpacity>
+                        ))}
+
+                        <View style={{ marginTop: 20 }}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalMembresia(false)}>
+                                <Text style={styles.cancelText}>Cancelar</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
