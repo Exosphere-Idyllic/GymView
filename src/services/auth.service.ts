@@ -59,6 +59,7 @@ export interface AdminUsuario {
     telefono?: string;
     cedula?: string;
     fechaNacimiento?: string;
+    idEntrenador?: number | null;
 }
 
 export interface CrearUsuarioAdminRequest {
@@ -71,6 +72,7 @@ export interface CrearUsuarioAdminRequest {
     telefono?: string;
     cedula?: string;
     fechaNacimiento?: string;
+    idEntrenador?: number | null;
 }
 
 // ─── Servicio ──────────────────────────────────────────────────────────────

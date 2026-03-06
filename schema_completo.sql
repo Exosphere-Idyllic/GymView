@@ -81,7 +81,8 @@ CREATE TABLE IF NOT EXISTS clientes (
     cedula            VARCHAR(15),
     fecha_nacimiento  DATE,
     id_membresia      INTEGER REFERENCES membresias(id_membresia),
-    fecha_vencimiento DATE
+    fecha_vencimiento DATE,
+    id_entrenador     INTEGER REFERENCES entrenadores(id_entrenador)
 );
 
 -- ============================================================

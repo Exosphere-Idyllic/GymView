@@ -112,6 +112,16 @@ const entrenadoresService = {
             API_CONFIG.ENDPOINTS.ENTRENADORES.RUTINA_REACTIVAR(idRutina)
         );
     },
+
+    /**
+     * Asignar rutina plantilla a un cliente (duplica la rutina y la asocia)
+     * POST /api/entrenadores/rutinas/{idRutinaTemplate}/asignar/{idClienteTarget}
+     */
+    async asignarRutina(idRutinaTemplate: number, idClienteTarget: number): Promise<{ mensaje: string }> {
+        return apiClient.post(
+            API_CONFIG.ENDPOINTS.ENTRENADORES.ASIGNAR_RUTINA(idRutinaTemplate, idClienteTarget)
+        );
+    }
 };
 
 export default entrenadoresService;

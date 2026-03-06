@@ -45,6 +45,7 @@ export const API_CONFIG = {
             CREAR_RUTINA: (idUsuario: number) => `/entrenadores/${idUsuario}/crearRutina`, // POST
             RUTINA_ID: (idRutina: number) => `/entrenadores/rutinas/${idRutina}`, // PUT, DELETE
             RUTINA_REACTIVAR: (idRutina: number) => `/entrenadores/rutinas/${idRutina}/reactivar`, // PUT
+            ASIGNAR_RUTINA: (idRutinaTemplate: number, idClienteTarget: number) => `/entrenadores/rutinas/${idRutinaTemplate}/asignar/${idClienteTarget}`, // POST
         },
         USUARIOS: {
             BASE: '/usuarios', // GET, POST, PUT

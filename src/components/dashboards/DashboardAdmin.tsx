@@ -10,7 +10,7 @@ import membresiaService, { PLANES_MEMBRESIA } from '../../services/membresia.ser
 import apiClient from '../../services/api.client';
 import { API_CONFIG } from '../../config/api.config';
 
-type Tab = 'resumen' | 'clientes' | 'entrenadores' | 'pagos' | 'logs' | 'usuarios';
+type Tab = 'resumen' | 'clientes' | 'entrenadores' | 'pagos' | 'logs' | 'usuarios' | 'entrenamientos';
 
 export default function DashboardAdmin() {
     const [activeTab, setActiveTab] = useState<Tab>('resumen');
@@ -21,6 +21,7 @@ export default function DashboardAdmin() {
     const [stats, setStats] = useState<AdminDashboardResponse | null>(null);
     const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
     const [clientes, setClientes] = useState<AdminUsuario[]>([]);
+    const [entrenadores, setEntrenadores] = useState<AdminUsuario[]>([]);
     const [pagos, setPagos] = useState<Pago[]>([]);
     const [logs, setLogs] = useState<any[]>([]);
     const [loadingStats, setLoadingStats] = useState(false);
@@ -35,7 +36,7 @@ export default function DashboardAdmin() {
     const [editingUser, setEditingUser] = useState<AdminUsuario | null>(null);
     const [formUsuario, setFormUsuario] = useState({
         nombre: '', apellido: '', usuario: '', contrasena: '', idRol: 4,
-        email: '', telefono: '', cedula: '', fechaNacimiento: ''
+        email: '', telefono: '', cedula: '', fechaNacimiento: '', idEntrenador: null as number | null
     });
     const [savingUser, setSavingUser] = useState(false);
 
@@ -44,10 +45,14 @@ export default function DashboardAdmin() {
     const [clienteMembresia, setClienteMembresia] = useState<AdminUsuario | null>(null);
     const [savingMembresia, setSavingMembresia] = useState(false);
 
+    // ── Estado Tab Entrenamientos ──────────────────────────────
+    const [selectedEntrenadorTab, setSelectedEntrenadorTab] = useState<AdminUsuario | null>(null);
+
     const tabs: { key: Tab; label: string; icon: string }[] = [
         { key: 'resumen', label: 'Resumen', icon: '📊' },
         { key: 'usuarios', label: 'Usuarios', icon: '🛡️' },
         { key: 'clientes', label: 'Clientes', icon: '👥' },
+        { key: 'entrenamientos', label: 'Entrenamientos', icon: '💪' },
         { key: 'pagos', label: 'Pagos', icon: '💰' },
         { key: 'logs', label: 'Accesos', icon: '🔐' },
     ];
@@ -93,6 +98,15 @@ export default function DashboardAdmin() {
         }
     }, []);
 
+    const cargarEntrenadores = useCallback(async () => {
+        try {
+            const data = await authService.getUsuariosAdmin();
+            setEntrenadores(data.filter(u => u.rol === 'Entrenador' && u.activo));
+        } catch (e: any) {
+            console.error('Error cargando entrenadores:', e);
+        }
+    }, []);
+
     const cargarPagos = useCallback(async () => {
         setLoadingPagos(true);
         try {
@@ -126,6 +140,10 @@ export default function DashboardAdmin() {
     useEffect(() => {
         if (activeTab === 'usuarios') cargarUsuarios();
         if (activeTab === 'clientes') cargarClientes();
+        if (activeTab === 'entrenamientos') {
+            cargarEntrenadores();
+            cargarClientes();
+        }
         if (activeTab === 'pagos') cargarPagos();
         if (activeTab === 'logs') cargarLogs();
     }, [activeTab]);
@@ -135,7 +153,7 @@ export default function DashboardAdmin() {
         setEditingUser(null);
         setFormUsuario({
             nombre: '', apellido: '', usuario: '', contrasena: '', idRol: 4,
-            email: '', telefono: '', cedula: '', fechaNacimiento: ''
+            email: '', telefono: '', cedula: '', fechaNacimiento: '', idEntrenador: null
         });
         setModalVisible(true);
     };
@@ -144,7 +162,8 @@ export default function DashboardAdmin() {
         setEditingUser(u);
         setFormUsuario({
             nombre: u.nombre, apellido: u.apellido, usuario: u.usuario, contrasena: '', idRol: rolNameToId(u.rol),
-            email: u.email || '', telefono: u.telefono || '', cedula: u.cedula || '', fechaNacimiento: u.fechaNacimiento?.split('T')[0] || ''
+            email: u.email || '', telefono: u.telefono || '', cedula: u.cedula || '', fechaNacimiento: u.fechaNacimiento?.split('T')[0] || '',
+            idEntrenador: u.idEntrenador || null
         });
         setModalVisible(true);
     };
@@ -200,6 +219,27 @@ export default function DashboardAdmin() {
                 { text: 'Cancelar', style: 'cancel' },
                 { text: 'Confirmar', onPress: doAction }
             ]);
+        }
+    };
+
+    const toggleAsignacion = async (cliente: AdminUsuario, idEntrenadorTarget: number, isCurrentlyAssigned: boolean) => {
+        try {
+            const formData = {
+                nombre: cliente.nombre,
+                apellido: cliente.apellido,
+                usuario: cliente.usuario,
+                idRol: rolNameToId(cliente.rol),
+                email: cliente.email || '',
+                telefono: cliente.telefono || '',
+                cedula: cliente.cedula || '',
+                fechaNacimiento: cliente.fechaNacimiento?.split('T')[0] || '',
+                idEntrenador: isCurrentlyAssigned ? null : idEntrenadorTarget
+            };
+            await authService.editarUsuarioAdmin(cliente.id, formData as any);
+            // Actualizamos la lista local inmediatamente para que la UI sea responsiva
+            setClientes(prev => prev.map(c => c.id === cliente.id ? { ...c, idEntrenador: isCurrentlyAssigned ? null : idEntrenadorTarget } : c));
+        } catch (e: any) {
+            Alert.alert('Error', 'No se pudo actualizar la asignación: ' + e.message);
         }
     };
 
@@ -471,6 +511,77 @@ export default function DashboardAdmin() {
                     </>
                 )}
 
+                {/* ─── ENTRENAMIENTOS (Asignaciones) ─── */}
+                {activeTab === 'entrenamientos' && (
+                    <View style={{ flex: 1, minHeight: 500 }}>
+                        <Text style={styles.sectionTitle}>Asignación de Alumnos a Entrenadores</Text>
+                        <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 16 }}>
+                            {/* Columna Izquierda: Entrenadores */}
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 8, color: Colors.text }}>Selecciona un Entrenador:</Text>
+                                {entrenadores.length === 0 ? (
+                                    <Text style={styles.emptyText}>No hay entrenadores activos.</Text>
+                                ) : (
+                                    entrenadores.map(e => (
+                                        <TouchableOpacity
+                                            key={e.id}
+                                            style={[styles.card, selectedEntrenadorTab?.id === e.id && { borderColor: Colors.primary, borderWidth: 2 }]}
+                                            onPress={() => setSelectedEntrenadorTab(e)}
+                                        >
+                                            <View style={styles.cardRow}>
+                                                <View style={[styles.avatar, { backgroundColor: Colors.primary }]}><Text style={styles.avatarText}>{(e.nombre ?? '?')[0]}</Text></View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.cardName}>{e.nombre} {e.apellido}</Text>
+                                                    <Text style={styles.cardSub}>@{e.usuario}</Text>
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))
+                                )}
+                            </View>
+
+                            {/* Columna Derecha: Clientes del Entrenador Seleccionado */}
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 8, color: Colors.text }}>
+                                    {selectedEntrenadorTab ? `Alumnos de ${selectedEntrenadorTab.nombre}:` : 'Selecciona un entrenador primero'}
+                                </Text>
+                                {selectedEntrenadorTab ? (
+                                    clientes.length === 0 ? (
+                                        <Text style={styles.emptyText}>No hay clientes registrados.</Text>
+                                    ) : (
+                                        <ScrollView style={{ maxHeight: 600 }}>
+                                            {clientes.map(c => {
+                                                const isAssigned = c.idEntrenador === selectedEntrenadorTab.id;
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={c.id}
+                                                        style={[styles.card, { paddingVertical: 10, paddingHorizontal: 12, opacity: isAssigned ? 1 : 0.6 }]}
+                                                        onPress={() => toggleAsignacion(c, selectedEntrenadorTab.id, isAssigned)}
+                                                    >
+                                                        <View style={[styles.cardRow, { alignItems: 'center' }]}>
+                                                            <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: Colors.primary, backgroundColor: isAssigned ? Colors.primary : 'transparent', marginRight: 10, alignItems: 'center', justifyContent: 'center' }}>
+                                                                {isAssigned && <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>✓</Text>}
+                                                            </View>
+                                                            <View style={{ flex: 1 }}>
+                                                                <Text style={styles.cardName}>{c.nombre} {c.apellido}</Text>
+                                                                <Text style={styles.cardSub}>{c.membresia ? `Membresía: ${c.membresia}` : 'Sin membresía'}</Text>
+                                                            </View>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </ScrollView>
+                                    )
+                                ) : (
+                                    <View style={styles.emptyBox}>
+                                        <Text style={styles.emptyText}>👈 Haz clic en un entrenador</Text>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                    </View>
+                )}
+
                 {/* ─── PAGOS ─── */}
                 {activeTab === 'pagos' && (
                     <>
@@ -586,6 +697,29 @@ export default function DashboardAdmin() {
                                 ))}
                             </View>
                         </View>
+
+                        {formUsuario.idRol === 4 && (
+                            <View style={styles.fieldGroup}>
+                                <Text style={styles.fieldLabel}>Entrenador Asignado</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                                    <TouchableOpacity
+                                        style={[styles.rolBtn, formUsuario.idEntrenador === null && styles.rolBtnActive, { marginRight: 8 }]}
+                                        onPress={() => setFormUsuario(prev => ({ ...prev, idEntrenador: null }))}
+                                    >
+                                        <Text style={[styles.rolBtnText, formUsuario.idEntrenador === null && { color: Colors.black }]}>Ninguno</Text>
+                                    </TouchableOpacity>
+                                    {usuarios.filter(u => u.rol === 'Entrenador' && u.activo).map(ent => (
+                                        <TouchableOpacity
+                                            key={ent.id}
+                                            style={[styles.rolBtn, formUsuario.idEntrenador === ent.id && styles.rolBtnActive, { marginRight: 8 }]}
+                                            onPress={() => setFormUsuario(prev => ({ ...prev, idEntrenador: ent.id }))}
+                                        >
+                                            <Text style={[styles.rolBtnText, formUsuario.idEntrenador === ent.id && { color: Colors.black }]}>{ent.nombre} {ent.apellido}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        )}
 
                         <View style={styles.modalActions}>
                             <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>

@@ -4,11 +4,10 @@
 import apiClient from './api.client';
 import { API_CONFIG } from '../config/api.config';
 
-// Planes disponibles — reflejan la tabla tipos_membresia del backend
+// Planes disponibles — reflejan la tabla membresias del backend
 export const PLANES_MEMBRESIA = [
     { id: 1, nombre: 'Smart', precio: 25.00, dias: 30, icon: '🥉' },
     { id: 2, nombre: 'Black', precio: 40.00, dias: 30, icon: '⚫' },
-    { id: 3, nombre: 'Plus', precio: 55.00, dias: 30, icon: '🥇' },
 ];
 
 const membresiaService = {

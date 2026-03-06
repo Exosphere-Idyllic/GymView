@@ -8,20 +8,9 @@ import Colors from '../../theme/colors';
 import { useAuth } from '../../store/AuthContext';
 import { useRouter } from 'expo-router';
 import entrenadoresService, { EntrenadorDashboard, NuevaRutina, RutinaItem } from '../../services/entrenadores.service';
+import rutinasService, { Ejercicio } from '../../services/rutinas.service';
 
 type Tab = 'tablero' | 'alumnos' | 'rutinas';
-
-// Lista de ejercicios disponibles (igual que el backend tiene en su BD)
-const EJERCICIOS_DISPONIBLES = [
-    { id: 1, nombre: 'Press de Banca Plano', musculo: 'Pecho' },
-    { id: 2, nombre: 'Sentadilla con Barra', musculo: 'Piernas' },
-    { id: 3, nombre: 'Jalón al Pecho', musculo: 'Espalda' },
-    { id: 4, nombre: 'Curl con Mancuernas', musculo: 'Bíceps' },
-    { id: 5, nombre: 'Press Militar', musculo: 'Hombros' },
-    { id: 6, nombre: 'Peso Muerto', musculo: 'Espalda/Piernas' },
-    { id: 7, nombre: 'Fondos en Paralelas', musculo: 'Tríceps' },
-    { id: 8, nombre: 'Plancha Abdominal', musculo: 'Core' },
-];
 
 export default function DashboardEntrenador() {
     const [activeTab, setActiveTab] = useState<Tab>('tablero');
@@ -31,11 +20,22 @@ export default function DashboardEntrenador() {
     const { user, logout } = useAuth();
     const router = useRouter();
 
-    // ── Modal crear/editar rutina ──────────────────────────────
     const [modalVisible, setModalVisible] = useState(false);
     const [editingRutina, setEditingRutina] = useState<RutinaItem | null>(null);
     const [formRutina, setFormRutina] = useState<NuevaRutina>({ idCliente: 0, nombreRutina: '', idsEjercicios: [] });
     const [savingRutina, setSavingRutina] = useState(false);
+
+    // ── Asignar Rutina (Plantilla) ────────────────────────────
+    const [modalAsignarVisible, setModalAsignarVisible] = useState(false);
+    const [rutinaToAssign, setRutinaToAssign] = useState<RutinaItem | null>(null);
+    const [clienteParaAsignar, setClienteParaAsignar] = useState<number>(0);
+    const [assigningRutina, setAssigningRutina] = useState(false);
+
+    // ── Ejercicios Dinámicos ───────────────────────────────────
+    const [ejercicios, setEjercicios] = useState<Ejercicio[]>([]);
+    const [modalEjercicio, setModalEjercicio] = useState(false);
+    const [formEjercicio, setFormEjercicio] = useState({ nombre: '', grupoMuscular: '' });
+    const [savingEjercicio, setSavingEjercicio] = useState(false);
 
     const cargarDashboard = useCallback(async () => {
         if (!user?.id_usuario) return;
@@ -51,9 +51,19 @@ export default function DashboardEntrenador() {
         }
     }, [user?.id_usuario]);
 
+    const cargarEjercicios = useCallback(async () => {
+        try {
+            const data = await rutinasService.getEjercicios();
+            setEjercicios(data);
+        } catch (e: any) {
+            console.log('Error al cargar ejercicios', e);
+        }
+    }, []);
+
     useEffect(() => {
         cargarDashboard();
-    }, [cargarDashboard]);
+        cargarEjercicios();
+    }, [cargarDashboard, cargarEjercicios]);
 
     const tabs: { key: Tab; label: string; icon: string }[] = [
         { key: 'tablero', label: 'Tablero', icon: '📊' },
@@ -79,10 +89,7 @@ export default function DashboardEntrenador() {
             Alert.alert('Error', 'El nombre de la rutina es obligatorio');
             return;
         }
-        if (formRutina.idCliente === 0) {
-            Alert.alert('Error', 'Selecciona un cliente');
-            return;
-        }
+        // idCliente === 0 ahora significa "Plantilla", así que es válido.
         if (formRutina.idsEjercicios.length === 0) {
             Alert.alert('Error', 'Selecciona al menos un ejercicio');
             return;
@@ -123,6 +130,31 @@ export default function DashboardEntrenador() {
         ]);
     };
 
+    const abrirAsignarRutina = (r: RutinaItem) => {
+        setRutinaToAssign(r);
+        setClienteParaAsignar(0);
+        setModalAsignarVisible(true);
+    };
+
+    const confirmarAsignacion = async () => {
+        if (!rutinaToAssign) return;
+        if (clienteParaAsignar === 0) {
+            Alert.alert('Error', 'Debes seleccionar un alumno para asignar esta rutina');
+            return;
+        }
+        setAssigningRutina(true);
+        try {
+            await entrenadoresService.asignarRutina(rutinaToAssign.id, clienteParaAsignar);
+            Alert.alert('✅ Éxito', 'Rutina asignada correctamente');
+            setModalAsignarVisible(false);
+            cargarDashboard();
+        } catch (e: any) {
+            Alert.alert('Error', e.message || 'No se pudo asignar la rutina');
+        } finally {
+            setAssigningRutina(false);
+        }
+    };
+
     const toggleEjercicio = (id: number) => {
         setFormRutina(prev => ({
             ...prev,
@@ -130,6 +162,25 @@ export default function DashboardEntrenador() {
                 ? prev.idsEjercicios.filter(e => e !== id)
                 : [...prev.idsEjercicios, id],
         }));
+    };
+
+    const guardarEjercicio = async () => {
+        if (!formEjercicio.nombre.trim()) {
+            Alert.alert('Error', 'El nombre del ejercicio es obligatorio');
+            return;
+        }
+        setSavingEjercicio(true);
+        try {
+            await rutinasService.crearEjercicio(formEjercicio.nombre, formEjercicio.grupoMuscular);
+            Alert.alert('✅', 'Ejercicio creado exitosamente');
+            setModalEjercicio(false);
+            setFormEjercicio({ nombre: '', grupoMuscular: '' });
+            cargarEjercicios();
+        } catch (e: any) {
+            Alert.alert('Error', e.message);
+        } finally {
+            setSavingEjercicio(false);
+        }
     };
 
     if (loading) {
@@ -164,7 +215,7 @@ export default function DashboardEntrenador() {
                 <View>
                     <Text style={styles.headerTitle}>⚡ IRON COACH</Text>
                     <Text style={styles.headerSub}>
-                        {dashboard.nombre} · {dashboard.especialidad}
+                        {dashboard.nombre} {user?.nombre_completo} {dashboard.especialidad}
                         {apiError ? '  ⚠️' : '  🟢'}
                     </Text>
                 </View>
@@ -264,9 +315,14 @@ export default function DashboardEntrenador() {
                     <>
                         <View style={styles.sectionHeader}>
                             <Text style={styles.sectionTitle}>Biblioteca ({dashboard.listaRutinas.length})</Text>
-                            <TouchableOpacity style={styles.addBtn} onPress={() => abrirCrearRutina()}>
-                                <Text style={styles.addBtnText}>+ Nueva</Text>
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <TouchableOpacity onPress={() => setModalEjercicio(true)} style={[{ backgroundColor: '#333' }, styles.addBtn]}>
+                                    <Text style={[styles.addBtnText, { color: '#fff' }]}>Ejercicios +</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.addBtn} onPress={() => abrirCrearRutina()}>
+                                    <Text style={styles.addBtnText}>Rutina +</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                         {dashboard.listaRutinas.length === 0 ? (
                             <View style={[styles.card, { alignItems: 'center', padding: 30 }]}>
@@ -289,6 +345,11 @@ export default function DashboardEntrenador() {
                                         <TouchableOpacity onPress={() => abrirEditarRutina(r)}>
                                             <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: '600' }}>✏️ Editar</Text>
                                         </TouchableOpacity>
+                                        {r.idCliente === 0 && r.activa && (
+                                            <TouchableOpacity onPress={() => abrirAsignarRutina(r)}>
+                                                <Text style={{ color: Colors.info || '#2196F3', fontSize: 13, fontWeight: '600' }}>👥 Asignar</Text>
+                                            </TouchableOpacity>
+                                        )}
                                         {r.activa ? (
                                             <TouchableOpacity onPress={() => eliminarRutina(r)}>
                                                 <Text style={{ color: Colors.danger, fontSize: 13, fontWeight: '600' }}>🗑️ Desactivar</Text>
@@ -331,9 +392,17 @@ export default function DashboardEntrenador() {
 
                             {dashboard.listaAlumnos.length > 0 && (
                                 <View style={styles.fieldGroup}>
-                                    <Text style={styles.fieldLabel}>Cliente asignado *</Text>
+                                    <Text style={styles.fieldLabel}>Asignar a (Opcional) *</Text>
                                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                                         <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            <TouchableOpacity
+                                                style={[styles.rolBtn, formRutina.idCliente === 0 && styles.rolBtnActive]}
+                                                onPress={() => setFormRutina(prev => ({ ...prev, idCliente: 0 }))}
+                                            >
+                                                <Text style={[styles.rolBtnText, formRutina.idCliente === 0 && { color: Colors.black }]}>
+                                                    Plantilla (Sin Cliente)
+                                                </Text>
+                                            </TouchableOpacity>
                                             {dashboard.listaAlumnos.map((al, i) => (
                                                 <TouchableOpacity
                                                     key={i}
@@ -352,18 +421,18 @@ export default function DashboardEntrenador() {
 
                             <View style={styles.fieldGroup}>
                                 <Text style={styles.fieldLabel}>Ejercicios ({formRutina.idsEjercicios.length} seleccionados)</Text>
-                                {EJERCICIOS_DISPONIBLES.map(e => {
-                                    const sel = formRutina.idsEjercicios.includes(e.id);
+                                {ejercicios.map(e => {
+                                    const sel = formRutina.idsEjercicios.includes(e.idEjercicio);
                                     return (
                                         <TouchableOpacity
-                                            key={e.id}
+                                            key={e.idEjercicio}
                                             style={[styles.ejercicioItem, sel && styles.ejercicioItemSel]}
-                                            onPress={() => toggleEjercicio(e.id)}
+                                            onPress={() => toggleEjercicio(e.idEjercicio)}
                                         >
                                             <Text style={[styles.ejercicioItemText, sel && { color: Colors.black }]}>
                                                 {sel ? '✓ ' : '○ '}{e.nombre}
                                             </Text>
-                                            <Text style={[styles.ejercicioItemSub, sel && { color: Colors.black }]}>{e.musculo}</Text>
+                                            <Text style={[styles.ejercicioItemSub, sel && { color: Colors.black }]}>{e.grupoMuscular}</Text>
                                         </TouchableOpacity>
                                     );
                                 })}
@@ -382,6 +451,88 @@ export default function DashboardEntrenador() {
                             </View>
                         </View>
                     </ScrollView>
+                </View>
+            </Modal>
+            {/* ─── Modal Crear Ejercicio ─── */}
+            <Modal visible={modalEjercicio} animationType="slide" transparent onRequestClose={() => setModalEjercicio(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <Text style={styles.modalTitle}>🗂️ Nuevo Ejercicio</Text>
+
+                        <View style={styles.fieldGroup}>
+                            <Text style={styles.fieldLabel}>Nombre *</Text>
+                            <TextInput
+                                style={styles.fieldInput}
+                                placeholder="Ej: Curl de Bíceps"
+                                placeholderTextColor="#666"
+                                value={formEjercicio.nombre}
+                                onChangeText={v => setFormEjercicio({ ...formEjercicio, nombre: v })}
+                            />
+                        </View>
+                        <View style={styles.fieldGroup}>
+                            <Text style={styles.fieldLabel}>Grupo Muscular</Text>
+                            <TextInput
+                                style={styles.fieldInput}
+                                placeholder="Ej: Piernas, Pecho..."
+                                placeholderTextColor="#666"
+                                value={formEjercicio.grupoMuscular}
+                                onChangeText={v => setFormEjercicio({ ...formEjercicio, grupoMuscular: v })}
+                            />
+                        </View>
+
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalEjercicio(false)}>
+                                <Text style={styles.cancelText}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.saveBtn} onPress={guardarEjercicio} disabled={savingEjercicio}>
+                                {savingEjercicio ? <ActivityIndicator color={Colors.black} /> : <Text style={styles.saveBtnText}>Guardar</Text>}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ─── Modal Asignar Rutina a Alumno ─── */}
+            <Modal visible={modalAsignarVisible} animationType="slide" transparent onRequestClose={() => setModalAsignarVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <Text style={styles.modalTitle}>👥 Asignar a Alumno</Text>
+
+                        <Text style={{ ...styles.fieldLabel, marginBottom: 15 }}>
+                            Selecciona a un alumno para asignarle la rutina: <Text style={{ color: Colors.primary }}>{rutinaToAssign?.nombre}</Text>
+                        </Text>
+
+                        {dashboard.listaAlumnos.length > 0 ? (
+                            <ScrollView style={{ maxHeight: 300 }}>
+                                {dashboard.listaAlumnos.map((al, i) => (
+                                    <TouchableOpacity
+                                        key={i}
+                                        style={[styles.ejercicioItem, clienteParaAsignar === al.idCliente && styles.ejercicioItemSel]}
+                                        onPress={() => setClienteParaAsignar(al.idCliente)}
+                                    >
+                                        <Text style={[styles.ejercicioItemText, clienteParaAsignar === al.idCliente && { color: Colors.black }]}>
+                                            {clienteParaAsignar === al.idCliente ? '✓ ' : '○ '}{al.nombre}
+                                        </Text>
+                                        <Text style={[styles.ejercicioItemSub, clienteParaAsignar === al.idCliente && { color: Colors.black }]}>{al.plan}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        ) : (
+                            <Text style={styles.empty}>No tienes alumnos asignados</Text>
+                        )}
+
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalAsignarVisible(false)}>
+                                <Text style={styles.cancelText}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.saveBtn} onPress={confirmarAsignacion} disabled={assigningRutina || clienteParaAsignar === 0}>
+                                {assigningRutina
+                                    ? <ActivityIndicator color={Colors.black} size="small" />
+                                    : <Text style={styles.saveBtnText}>Asignar</Text>
+                                }
+                            </TouchableOpacity>
+                        </View>
+                    </View>
                 </View>
             </Modal>
         </SafeAreaView>
