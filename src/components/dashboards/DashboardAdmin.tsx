@@ -7,10 +7,11 @@ import { useRouter } from 'expo-router';
 import authService, { AdminDashboardResponse, AdminUsuario } from '../../services/auth.service';
 import pagosService, { Pago } from '../../services/pagos.service';
 import membresiaService, { PLANES_MEMBRESIA } from '../../services/membresia.service';
+import reportesService, { ReporteAsistencia, ReporteIngresos, ReporteRutinas } from '../../services/reportes.service';
 import apiClient from '../../services/api.client';
 import { API_CONFIG } from '../../config/api.config';
 
-type Tab = 'resumen' | 'clientes' | 'entrenadores' | 'pagos' | 'logs' | 'usuarios' | 'entrenamientos';
+type Tab = 'resumen' | 'clientes' | 'entrenadores' | 'pagos' | 'logs' | 'usuarios' | 'entrenamientos' | 'reportes';
 
 export default function DashboardAdmin() {
     const [activeTab, setActiveTab] = useState<Tab>('resumen');
@@ -29,8 +30,6 @@ export default function DashboardAdmin() {
     const [loadingClientes, setLoadingClientes] = useState(false);
     const [loadingPagos, setLoadingPagos] = useState(false);
     const [loadingLogs, setLoadingLogs] = useState(false);
-    const [apiError, setApiError] = useState<string | null>(null);
-
     // ── Estado Modal Crear/Editar usuario ──────────────────────
     const [modalVisible, setModalVisible] = useState(false);
     const [editingUser, setEditingUser] = useState<AdminUsuario | null>(null);
@@ -47,6 +46,8 @@ export default function DashboardAdmin() {
 
     // ── Estado Tab Entrenamientos ──────────────────────────────
     const [selectedEntrenadorTab, setSelectedEntrenadorTab] = useState<AdminUsuario | null>(null);
+    const [draftAssignments, setDraftAssignments] = useState<Record<number, boolean>>({});
+    const [isSavingAssignments, setIsSavingAssignments] = useState(false);
 
     const tabs: { key: Tab; label: string; icon: string }[] = [
         { key: 'resumen', label: 'Resumen', icon: '📊' },
@@ -55,7 +56,15 @@ export default function DashboardAdmin() {
         { key: 'entrenamientos', label: 'Entrenamientos', icon: '💪' },
         { key: 'pagos', label: 'Pagos', icon: '💰' },
         { key: 'logs', label: 'Accesos', icon: '🔐' },
+        { key: 'reportes', label: 'Reportes', icon: '📈' },
     ];
+
+    // ── Estado Reportes ─────────────────────────────────────────
+    const [reportesAsistencia, setReportesAsistencia] = useState<ReporteAsistencia[]>([]);
+    const [reportesIngresos, setReportesIngresos] = useState<ReporteIngresos[]>([]);
+    const [reportesRutinasList, setReportesRutinasList] = useState<ReporteRutinas[]>([]);
+    const [loadingReportes, setLoadingReportes] = useState(false);
+    const [apiError, setApiError] = useState<string | null>(null);
 
     // ── Cargar stats ───────────────────────────────────────────
     const cargarStats = useCallback(async () => {
@@ -65,9 +74,8 @@ export default function DashboardAdmin() {
             const data = await authService.getAdminDashboard();
             setStats(data);
         } catch (e: any) {
-            setApiError(e.message);
-            // Fallback a mock
-            setStats({ totalClientes: 4, totalEntrenadores: 2, ingresos: 119.96 });
+            setApiError(e.message || 'Error de conexión');
+            setStats(null);
         } finally {
             setLoadingStats(false);
         }
@@ -132,6 +140,25 @@ export default function DashboardAdmin() {
         }
     }, []);
 
+    const cargarReportes = useCallback(async () => {
+        setLoadingReportes(true);
+        try {
+            const [asistencias, ingresos, rutinas] = await Promise.all([
+                reportesService.getAsistencia(),
+                reportesService.getIngresos(),
+                reportesService.getRutinas()
+            ]);
+            setReportesAsistencia(Array.isArray(asistencias) ? asistencias : []);
+            setReportesIngresos(Array.isArray(ingresos) ? ingresos : []);
+            setReportesRutinasList(Array.isArray(rutinas) ? rutinas : []);
+        } catch (e: any) {
+            console.error('Error cargando reportes:', e);
+            Alert.alert('Error', 'No se pudieron cargar los reportes completos');
+        } finally {
+            setLoadingReportes(false);
+        }
+    }, []);
+
     useEffect(() => {
         cargarStats();
         cargarLogs();
@@ -146,7 +173,54 @@ export default function DashboardAdmin() {
         }
         if (activeTab === 'pagos') cargarPagos();
         if (activeTab === 'logs') cargarLogs();
+        if (activeTab === 'reportes') cargarReportes();
     }, [activeTab]);
+
+    const generarCSVContent = (tipo: 'ingresos' | 'asistencia' | 'rutinas'): string => {
+        let csv = '';
+        if (tipo === 'ingresos') {
+            csv = 'Periodo,Ventas,Total Recaudado\n';
+            reportesIngresos.forEach(ing => {
+                csv += `"${new Date(ing.fecha).toLocaleDateString('es')}","${ing.cantidadVentas}","${typeof ing.totalIngresos === 'number' ? ing.totalIngresos.toFixed(2) : ing.totalIngresos}"\n`;
+            });
+        } else if (tipo === 'asistencia') {
+            csv = 'Fecha,Total Ingresos,Clientes Unicos\n';
+            reportesAsistencia.forEach(asis => {
+                csv += `"${new Date(asis.fecha).toLocaleDateString('es')}","${asis.totalAsistencias}","${asis.clientesUnicos}"\n`;
+            });
+        } else if (tipo === 'rutinas') {
+            csv = 'Rutina,Entrenador,Alumnos Asignados,Estado\n';
+            reportesRutinasList.forEach(rut => {
+                csv += `"${rut.nombreRutina}","${rut.entrenador || 'N/A'}","${rut.alumnosAsignados}","${rut.activa ? 'Activa' : 'Inactiva'}"\n`;
+            });
+        }
+        return csv;
+    };
+
+    const exportarCSV = (tipo: 'ingresos' | 'asistencia' | 'rutinas') => {
+        const csvContent = generarCSVContent(tipo);
+        if (!csvContent) return;
+
+        try {
+            if (Platform.OS === 'web') {
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', `reporte_${tipo}_${new Date().getTime()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                Alert.alert('Éxito', 'Reporte CSV descargado correctamente.');
+            } else {
+                // Para simplificar, en móvil mostraremos el CSV o usaríamos expo-file-system en el futuro.
+                Alert.alert('Info', 'La exportación directa de archivos actualmente está soportada principalmente en web. Se integrará módulo nativo próximamente.');
+            }
+        } catch (err) {
+            console.error('Error al exportar CSV', err);
+            Alert.alert('Error', 'No se pudo generar el archivo CSV.');
+        }
+    };
 
     // ── Acciones usuario ───────────────────────────────────────
     const abrirModalCrear = () => {
@@ -222,24 +296,53 @@ export default function DashboardAdmin() {
         }
     };
 
-    const toggleAsignacion = async (cliente: AdminUsuario, idEntrenadorTarget: number, isCurrentlyAssigned: boolean) => {
+    const handleSelectEntrenador = (e: AdminUsuario) => {
+        setSelectedEntrenadorTab(e);
+        const initialDraft: Record<number, boolean> = {};
+        clientes.forEach(c => {
+            initialDraft[c.id] = c.idEntrenador === e.id;
+        });
+        setDraftAssignments(initialDraft);
+    };
+
+    const toggleAsignacion = (clienteId: number) => {
+        setDraftAssignments(prev => ({
+            ...prev,
+            [clienteId]: !prev[clienteId]
+        }));
+    };
+
+    const guardarAsignaciones = async () => {
+        if (!selectedEntrenadorTab) return;
+        setIsSavingAssignments(true);
         try {
-            const formData = {
-                nombre: cliente.nombre,
-                apellido: cliente.apellido,
-                usuario: cliente.usuario,
-                idRol: rolNameToId(cliente.rol),
-                email: cliente.email || '',
-                telefono: cliente.telefono || '',
-                cedula: cliente.cedula || '',
-                fechaNacimiento: cliente.fechaNacimiento?.split('T')[0] || '',
-                idEntrenador: isCurrentlyAssigned ? null : idEntrenadorTarget
-            };
-            await authService.editarUsuarioAdmin(cliente.id, formData as any);
-            // Actualizamos la lista local inmediatamente para que la UI sea responsiva
-            setClientes(prev => prev.map(c => c.id === cliente.id ? { ...c, idEntrenador: isCurrentlyAssigned ? null : idEntrenadorTarget } : c));
+            const changesPromises = clientes.map(async (c) => {
+                const wasAssigned = c.idEntrenador === selectedEntrenadorTab.id;
+                const isAssignedNow = draftAssignments[c.id] || false;
+                if (wasAssigned !== isAssignedNow) {
+                    const formData = {
+                        nombre: c.nombre,
+                        apellido: c.apellido,
+                        usuario: c.usuario,
+                        idRol: rolNameToId(c.rol),
+                        email: c.email || '',
+                        telefono: c.telefono || '',
+                        cedula: c.cedula || '',
+                        fechaNacimiento: c.fechaNacimiento?.split('T')[0] || '',
+                        idEntrenador: isAssignedNow ? selectedEntrenadorTab.id : null
+                    };
+                    return authService.editarUsuarioAdmin(c.id, formData as any).then(() => {
+                        c.idEntrenador = isAssignedNow ? selectedEntrenadorTab.id : undefined;
+                    });
+                }
+            });
+            await Promise.all(changesPromises);
+            Alert.alert('✅ Éxito', 'Asignaciones guardadas correctamente.');
+            cargarClientes(); // Reload fresh data
         } catch (e: any) {
-            Alert.alert('Error', 'No se pudo actualizar la asignación: ' + e.message);
+            Alert.alert('Error', 'Hubo un problema guardando algunas asignaciones: ' + e.message);
+        } finally {
+            setIsSavingAssignments(false);
         }
     };
 
@@ -349,7 +452,8 @@ export default function DashboardAdmin() {
                 ))}
             </ScrollView>
 
-            <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 30 }}>
+            <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 30, alignItems: 'center' }}>
+              <View style={styles.pageInner}>
 
                 {/* ─── RESUMEN ─── */}
                 {activeTab === 'resumen' && (
@@ -526,7 +630,7 @@ export default function DashboardAdmin() {
                                         <TouchableOpacity
                                             key={e.id}
                                             style={[styles.card, selectedEntrenadorTab?.id === e.id && { borderColor: Colors.primary, borderWidth: 2 }]}
-                                            onPress={() => setSelectedEntrenadorTab(e)}
+                                            onPress={() => handleSelectEntrenador(e)}
                                         >
                                             <View style={styles.cardRow}>
                                                 <View style={[styles.avatar, { backgroundColor: Colors.primary }]}><Text style={styles.avatarText}>{(e.nombre ?? '?')[0]}</Text></View>
@@ -541,35 +645,67 @@ export default function DashboardAdmin() {
                             </View>
 
                             {/* Columna Derecha: Clientes del Entrenador Seleccionado */}
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 8, color: Colors.text }}>
-                                    {selectedEntrenadorTab ? `Alumnos de ${selectedEntrenadorTab.nombre}:` : 'Selecciona un entrenador primero'}
-                                </Text>
+                            <View style={{ flex: 1.5 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 10 }}>
+                                    <Text style={{ fontWeight: 'bold', fontSize: 16, color: Colors.text }}>
+                                        {selectedEntrenadorTab ? `Alumnos de ${selectedEntrenadorTab.nombre}` : 'Selecciona un entrenador primero'}
+                                    </Text>
+                                    {selectedEntrenadorTab && (
+                                        <TouchableOpacity 
+                                            style={{ backgroundColor: isSavingAssignments ? '#999' : Colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6 }}
+                                            onPress={guardarAsignaciones}
+                                            disabled={isSavingAssignments}
+                                        >
+                                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>
+                                                {isSavingAssignments ? 'Guardando...' : '💾 Guardar Cambios'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+
                                 {selectedEntrenadorTab ? (
                                     clientes.length === 0 ? (
                                         <Text style={styles.emptyText}>No hay clientes registrados.</Text>
                                     ) : (
                                         <ScrollView style={{ maxHeight: 600 }}>
-                                            {clientes.map(c => {
-                                                const isAssigned = c.idEntrenador === selectedEntrenadorTab.id;
-                                                return (
-                                                    <TouchableOpacity
-                                                        key={c.id}
-                                                        style={[styles.card, { paddingVertical: 10, paddingHorizontal: 12, opacity: isAssigned ? 1 : 0.6 }]}
-                                                        onPress={() => toggleAsignacion(c, selectedEntrenadorTab.id, isAssigned)}
-                                                    >
-                                                        <View style={[styles.cardRow, { alignItems: 'center' }]}>
-                                                            <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: Colors.primary, backgroundColor: isAssigned ? Colors.primary : 'transparent', marginRight: 10, alignItems: 'center', justifyContent: 'center' }}>
-                                                                {isAssigned && <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>✓</Text>}
-                                                            </View>
-                                                            <View style={{ flex: 1 }}>
-                                                                <Text style={styles.cardName}>{c.nombre} {c.apellido}</Text>
-                                                                <Text style={styles.cardSub}>{c.membresia ? `Membresía: ${c.membresia}` : 'Sin membresía'}</Text>
-                                                            </View>
+                                            <Text style={{ fontWeight: 'bold', marginTop: 10, marginBottom: 5, color: Colors.primary }}>✅ Asignados</Text>
+                                            {clientes.filter(c => draftAssignments[c.id]).map(c => (
+                                                <TouchableOpacity
+                                                    key={c.id}
+                                                    style={[styles.card, { paddingVertical: 10, paddingHorizontal: 12, borderColor: Colors.primary, borderWidth: 1 }]}
+                                                    onPress={() => toggleAsignacion(c.id)}
+                                                >
+                                                    <View style={[styles.cardRow, { alignItems: 'center' }]}>
+                                                        <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: Colors.primary, backgroundColor: Colors.primary, marginRight: 10, alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>✓</Text>
                                                         </View>
-                                                    </TouchableOpacity>
-                                                );
-                                            })}
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={styles.cardName}>{c.nombre} {c.apellido}</Text>
+                                                            <Text style={[styles.cardSub, { fontSize: 11 }]}>{c.membresia ? `📋 ${c.membresia}` : '⚠️ Sin membresía'}</Text>
+                                                        </View>
+                                                    </View>
+                                                </TouchableOpacity>
+                                            ))}
+
+                                            <Text style={{ fontWeight: 'bold', marginTop: 20, marginBottom: 5, color: '#666' }}>Disponibles</Text>
+                                            {clientes.filter(c => !draftAssignments[c.id]).map(c => (
+                                                <TouchableOpacity
+                                                    key={c.id}
+                                                    style={[styles.card, { paddingVertical: 10, paddingHorizontal: 12, opacity: 0.8 }]}
+                                                    onPress={() => toggleAsignacion(c.id)}
+                                                >
+                                                    <View style={[styles.cardRow, { alignItems: 'center' }]}>
+                                                        <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#ccc', backgroundColor: 'transparent', marginRight: 10, alignItems: 'center', justifyContent: 'center' }} />
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={styles.cardName}>{c.nombre} {c.apellido}</Text>
+                                                            <Text style={[styles.cardSub, { fontSize: 11 }]}>
+                                                                {c.membresia ? `📋 ${c.membresia}` : '⚠️ Sin membresía'}
+                                                                {c.idEntrenador && c.idEntrenador !== selectedEntrenadorTab.id ? ` · 🏋️ Asignado a otro entrenador` : ''}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                </TouchableOpacity>
+                                            ))}
                                         </ScrollView>
                                     )
                                 ) : (
@@ -651,6 +787,112 @@ export default function DashboardAdmin() {
                         )}
                     </>
                 )}
+
+                {/* ─── REPORTES ADMINISTRATIVOS (RF08) ─── */}
+                {activeTab === 'reportes' && (
+                    <View style={{ flex: 1, minHeight: 600 }}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>Reportes Administrativos</Text>
+                            <TouchableOpacity style={styles.addBtn} onPress={cargarReportes}>
+                                <Text style={styles.addBtnText}>🔄 Actualizar</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {loadingReportes ? (
+                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 40 }}>
+                                <ActivityIndicator color={Colors.primary} size="large" />
+                                <Text style={styles.loadingText}>Generando reportes del sistema...</Text>
+                            </View>
+                        ) : (
+                            <>
+                                {/* Resumen Financiero */}
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 8 }}>
+                                    <Text style={{ color: Colors.text, fontSize: 16, fontWeight: '700' }}>💰 Ingresos y Ventas</Text>
+                                    <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#333' }]} onPress={() => exportarCSV('ingresos')}>
+                                        <Text style={styles.addBtnText}>📥 Exportar</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                {reportesIngresos.length === 0 ? (
+                                    <View style={styles.emptyBox}><Text style={styles.emptyText}>Sin datos de ingresos registrados.</Text></View>
+                                ) : (
+                                    <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>
+                                        <View style={{ flexDirection: 'row', backgroundColor: '#333', padding: 12 }}>
+                                            <Text style={{ flex: 2, color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Periodo</Text>
+                                            <Text style={{ flex: 1, color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center' }}>Ventas</Text>
+                                            <Text style={{ flex: 1.5, color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'right' }}>Total Recaudado</Text>
+                                        </View>
+                                        {reportesIngresos.map((ing, i) => (
+                                            <View key={i} style={{ flexDirection: 'row', padding: 12, borderTopWidth: 1, borderTopColor: Colors.border }}>
+                                                <Text style={{ flex: 2, color: Colors.text }}>{new Date(ing.fecha).toLocaleDateString('es')}</Text>
+                                                <Text style={{ flex: 1, color: Colors.text, textAlign: 'center' }}>{ing.cantidadVentas}</Text>
+                                                <Text style={{ flex: 1.5, color: Colors.success, fontWeight: 'bold', textAlign: 'right' }}>${typeof ing.totalIngresos === 'number' ? ing.totalIngresos.toFixed(2) : ing.totalIngresos}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
+
+                                {/* Asistencia */}
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 8 }}>
+                                    <Text style={{ color: Colors.text, fontSize: 16, fontWeight: '700' }}>👥 Flujo de Asistencia</Text>
+                                    <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#333' }]} onPress={() => exportarCSV('asistencia')}>
+                                        <Text style={styles.addBtnText}>📥 Exportar</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                {reportesAsistencia.length === 0 ? (
+                                    <View style={styles.emptyBox}><Text style={styles.emptyText}>Sin registros de asistencia recientes.</Text></View>
+                                ) : (
+                                    <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>
+                                        <View style={{ flexDirection: 'row', backgroundColor: '#333', padding: 12 }}>
+                                            <Text style={{ flex: 2, color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Fecha</Text>
+                                            <Text style={{ flex: 1, color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center' }}>Total Ingresos</Text>
+                                            <Text style={{ flex: 1, color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center' }}>Clientes Únicos</Text>
+                                        </View>
+                                        {reportesAsistencia.map((asis, i) => (
+                                            <View key={i} style={{ flexDirection: 'row', padding: 12, borderTopWidth: 1, borderTopColor: Colors.border }}>
+                                                <Text style={{ flex: 2, color: Colors.text }}>{new Date(asis.fecha).toLocaleDateString('es')}</Text>
+                                                <Text style={{ flex: 1, color: Colors.primary, fontWeight: 'bold', textAlign: 'center' }}>{asis.totalAsistencias}</Text>
+                                                <Text style={{ flex: 1, color: Colors.text, textAlign: 'center' }}>{asis.clientesUnicos}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
+
+                                {/* Rutinas Activas */}
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 8 }}>
+                                    <Text style={{ color: Colors.text, fontSize: 16, fontWeight: '700' }}>📋 Desempeño y Rutinas Activas</Text>
+                                    <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#333' }]} onPress={() => exportarCSV('rutinas')}>
+                                        <Text style={styles.addBtnText}>📥 Exportar</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                {reportesRutinasList.length === 0 ? (
+                                    <View style={styles.emptyBox}><Text style={styles.emptyText}>Sin rutinas activas en el sistema.</Text></View>
+                                ) : (
+                                    <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>
+                                        <View style={{ flexDirection: 'row', backgroundColor: '#333', padding: 12 }}>
+                                            <Text style={{ flex: 2, color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Rutina</Text>
+                                            <Text style={{ flex: 2, color: '#fff', fontWeight: 'bold', fontSize: 13 }}>Entrenador</Text>
+                                            <Text style={{ flex: 1, color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center' }}>Alumnos</Text>
+                                            <Text style={{ flex: 1, color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center' }}>Estado</Text>
+                                        </View>
+                                        {reportesRutinasList.map((rut, i) => (
+                                            <View key={i} style={{ flexDirection: 'row', padding: 12, borderTopWidth: 1, borderTopColor: Colors.border, alignItems: 'center' }}>
+                                                <Text style={{ flex: 2, color: Colors.text, fontWeight: '600' }}>{rut.nombreRutina}</Text>
+                                                <Text style={{ flex: 2, color: Colors.textMuted }}>{rut.entrenador || 'N/A'}</Text>
+                                                <Text style={{ flex: 1, color: Colors.text, textAlign: 'center' }}>{rut.alumnosAsignados}</Text>
+                                                <View style={{ flex: 1, alignItems: 'center' }}>
+                                                    <View style={[styles.badge, { backgroundColor: rut.activa ? Colors.success : '#555' }]}>
+                                                        <Text style={styles.badgeText}>{rut.activa ? 'Activa' : 'Inactiva'}</Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
+                            </>
+                        )}
+                    </View>
+                )}
+              </View>{/* end pageInner */}
             </ScrollView>
 
             {/* ─── Modal Crear / Editar Usuario ─── */}
@@ -782,7 +1024,8 @@ const styles = StyleSheet.create({
     tabIcon: { fontSize: 16 },
     tabLabel: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
     tabLabelActive: { color: Colors.primary, fontWeight: '600' },
-    content: { flex: 1, padding: 14 },
+    content: { flex: 1 },
+    pageInner: { width: '100%', maxWidth: 1100, paddingHorizontal: 16, paddingTop: 14 },
     loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
     loadingText: { color: Colors.textMuted, fontSize: 13 },
     warnBox: { backgroundColor: '#2d1a00', borderLeftWidth: 3, borderLeftColor: Colors.warning, borderRadius: 8, padding: 12, marginBottom: 14 },
@@ -817,8 +1060,8 @@ const styles = StyleSheet.create({
     emptyBox: { alignItems: 'center', paddingVertical: 30 },
     emptyText: { color: Colors.textMuted, fontSize: 14 },
     // Modal
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
-    modalCard: { backgroundColor: Colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+    modalCard: { backgroundColor: Colors.surface, borderRadius: 20, padding: 24, width: '100%', maxWidth: 620 },
     modalTitle: { color: Colors.text, fontWeight: 'bold', fontSize: 18, marginBottom: 20, textAlign: 'center' },
     fieldGroup: { marginBottom: 14 },
     fieldLabel: { color: Colors.textMuted, fontSize: 13, marginBottom: 6 },

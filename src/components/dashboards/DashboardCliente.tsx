@@ -31,29 +31,8 @@ export default function DashboardCliente() {
             const data = await clientesService.getDashboard(user.id_usuario);
             setDashboard(data);
         } catch (e: any) {
-            setApiError(e.message);
-            // Fallback mock
-            setDashboard({
-                nombreCompleto: user.nombre_completo || 'Juan Pérez',
-                email: user.email || 'juan@email.com',
-                telefono: '0991234567',
-                historialAsistencias: [
-                    { fecha: '2026-02-18', hora: '08:30' },
-                    { fecha: '2026-02-17', hora: '07:45' },
-                ],
-                nombreRutina: 'Rutina de Fuerza - Tren Superior',
-                entrenador: 'Carlos Mendoza',
-                ejercicios: [
-                    { nombre: 'Press de Banca Plano', seriesReps: '4 x 12' },
-                    { nombre: 'Jalón al Pecho', seriesReps: '4 x 12' },
-                    { nombre: 'Press Militar', seriesReps: '3 x 10' },
-                ],
-                rutinaTerminadaHoy: false,
-                nombrePlan: 'Plan Black',
-                precioPlan: 34.99,
-                fechaVencimiento: '2026-03-18',
-                estadoMembresia: 'Activo',
-            });
+            setApiError(e.message || 'Error de conexión. Modo desconectado.');
+            setDashboard(null);
         } finally {
             setLoading(false);
         }
@@ -115,7 +94,22 @@ export default function DashboardCliente() {
         );
     }
 
-    const d = dashboard!;
+    if (!dashboard) {
+        return (
+            <SafeAreaView style={styles.safe}>
+                <View style={[styles.centered, { padding: 20 }]}>
+                    <Text style={{ fontSize: 48, marginBottom: 10 }}>⚠️</Text>
+                    <Text style={{ color: Colors.text, fontSize: 18, textAlign: 'center', marginBottom: 10 }}>Información no disponible</Text>
+                    <Text style={{ color: Colors.textMuted, textAlign: 'center' }}>{apiError || 'No se pudo cargar tu perfil desde el servidor.'}</Text>
+                    <TouchableOpacity style={[styles.logoutBtn, { marginTop: 25 }]} onPress={async () => { await logout(); router.replace('/(auth)/login'); }}>
+                        <Text style={styles.logoutText}>Volver al Inicio y Reintentar</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    const d = dashboard;
     const membresiaActiva = d.estadoMembresia === 'Activo' || d.estadoMembresia === 'Activa';
 
     return (
@@ -146,7 +140,8 @@ export default function DashboardCliente() {
                 </TouchableOpacity>
             </ScrollView>
 
-            <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 30 }}>
+            <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 30, alignItems: 'center' }}>
+              <View style={styles.pageInner}>
 
                 {/* ─── INICIO ─── */}
                 {activeTab === 'inicio' && (
@@ -318,6 +313,7 @@ export default function DashboardCliente() {
                         </View>
                     </View>
                 )}
+              </View>{/* end pageInner */}
             </ScrollView>
 
             {/* ─── Modal Renovar Membresía ─── */}
@@ -367,7 +363,8 @@ const styles = StyleSheet.create({
     tabActive: { borderBottomColor: Colors.primary },
     tabLabel: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
     tabLabelActive: { color: Colors.primary, fontWeight: '600' },
-    content: { flex: 1, padding: 14 },
+    content: { flex: 1 },
+    pageInner: { width: '100%', maxWidth: 1100, paddingHorizontal: 16, paddingTop: 14 },
     qrCard: { backgroundColor: Colors.surface, borderTopWidth: 4, borderTopColor: Colors.primary, borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 14 },
     qrTitle: { color: Colors.text, fontWeight: '700', fontSize: 16, marginBottom: 12 },
     qrBox: { backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 10, alignItems: 'center' },
@@ -404,8 +401,8 @@ const styles = StyleSheet.create({
     badge: { borderRadius: 6, paddingVertical: 3, paddingHorizontal: 8 },
     badgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
     // Modal
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
-    modalCard: { backgroundColor: Colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+    modalCard: { backgroundColor: Colors.surface, borderRadius: 20, padding: 24, width: '100%', maxWidth: 620 },
     modalTitle: { color: Colors.text, fontWeight: 'bold', fontSize: 18, marginBottom: 20, textAlign: 'center' },
     cancelBtn: { backgroundColor: 'transparent', paddingVertical: 12, alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#444' },
     cancelText: { color: Colors.textMuted, fontWeight: '600', fontSize: 14 },

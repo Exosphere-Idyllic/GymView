@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Alert,
-  Modal, TextInput, ActivityIndicator,
+  Modal, TextInput, ActivityIndicator, Platform,
 } from 'react-native';
 import { useAuth } from '../../src/store/AuthContext';
 import { useRouter } from 'expo-router';
@@ -65,11 +65,19 @@ export default function PerfilScreen() {
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert('Cerrar Sesión', '¿Estás seguro que deseas salir?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Salir', style: 'destructive', onPress: async () => { await logout(); router.replace('/(auth)/login'); } },
-    ]);
+  const handleLogout = async () => {
+    if (Platform.OS === 'web') {
+      // En web, Alert.alert no lanza el callback de los botones
+      const confirmado = window.confirm('¿Estás seguro que deseas cerrar sesión?');
+      if (!confirmado) return;
+      await logout();
+      router.replace('/(auth)/login');
+    } else {
+      Alert.alert('Cerrar Sesión', '¿Estás seguro que deseas salir?', [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Salir', style: 'destructive', onPress: async () => { await logout(); router.replace('/(auth)/login'); } },
+      ]);
+    }
   };
 
   return (
@@ -77,7 +85,8 @@ export default function PerfilScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Mi Perfil</Text>
       </View>
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40, alignItems: 'center' }}>
+        <View style={styles.pageInner}>
         {/* Avatar */}
         <View style={styles.avatarSection}>
           <View style={styles.avatar}>
@@ -122,20 +131,7 @@ export default function PerfilScreen() {
           ))}
         </View>
 
-        {/* API Status */}
-        <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: user?.usandoMock ? Colors.warning : Colors.success }]}>
-          <Text style={styles.cardTitle}>Estado del Sistema</Text>
-          <Text style={styles.apiStatus}>
-            {user?.usandoMock
-              ? <>Modo: <Text style={{ color: Colors.warning }}>Offline / Mock</Text></>
-              : <>Modo: <Text style={{ color: Colors.success }}>Conectado al API</Text></>}
-          </Text>
-          <Text style={styles.apiNote}>
-            {user?.usandoMock
-              ? 'Sin conexión al servidor. Los datos son de prueba.'
-              : 'Sesión activa con el servidor del gimnasio.'}
-          </Text>
-        </View>
+
 
         {/* Editar perfil (solo si estamos conectados al API) */}
         {!user?.usandoMock && (
@@ -149,6 +145,7 @@ export default function PerfilScreen() {
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutText}>🚪 Cerrar Sesión</Text>
         </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Modal Editar perfil */}
@@ -206,7 +203,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   header: { backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: 16, paddingVertical: 16 },
   headerTitle: { color: Colors.text, fontWeight: 'bold', fontSize: 20 },
-  content: { flex: 1, padding: 16 },
+  content: { flex: 1 },
+  pageInner: { width: '100%', maxWidth: 1100, paddingHorizontal: 16, paddingTop: 16 },
   avatarSection: { alignItems: 'center', paddingVertical: 24 },
   avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
   avatarText: { color: Colors.black, fontWeight: 'bold', fontSize: 28 },
@@ -226,8 +224,8 @@ const styles = StyleSheet.create({
   logoutText: { color: Colors.white, fontWeight: '700', fontSize: 16 },
   editarBtn: { borderLeftWidth: 4, borderLeftColor: Colors.primary },
   editarBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 15, marginBottom: 4 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: Colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalCard: { backgroundColor: Colors.surface, borderRadius: 20, padding: 24, width: '100%', maxWidth: 620 },
   modalTitle: { color: Colors.text, fontWeight: 'bold', fontSize: 18, marginBottom: 16, textAlign: 'center' },
   field: { marginBottom: 14 },
   label: { color: Colors.textMuted, fontSize: 13, marginBottom: 6 },

@@ -234,7 +234,8 @@ export default function DashboardEntrenador() {
                 ))}
             </ScrollView>
 
-            <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 30 }}>
+            <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 30, alignItems: 'center' }}>
+              <View style={styles.pageInner}>
 
                 {/* TABLERO */}
                 {activeTab === 'tablero' && (
@@ -335,7 +336,9 @@ export default function DashboardEntrenador() {
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.alumnoName}>{r.nombre}</Text>
-                                            <Text style={styles.alumnoSub}>{r.idsEjercicios.length} ejercicios · Cliente ID: {r.idCliente}</Text>
+                                            <Text style={styles.alumnoSub}>
+                                                {r.idsEjercicios.length} ejercicios · {r.idCliente === 0 ? 'Plantilla (Sin asignar)' : `Cliente ID: ${r.idCliente}`}
+                                            </Text>
                                         </View>
                                         <View style={[styles.badge, { backgroundColor: r.activa ? Colors.success : '#555' }]}>
                                             <Text style={styles.badgeText}>{r.activa ? 'Activa' : 'Inactiva'}</Text>
@@ -370,6 +373,7 @@ export default function DashboardEntrenador() {
                         )}
                     </>
                 )}
+              </View>{/* end pageInner */}
             </ScrollView>
 
             {/* ─── Modal Crear/Editar Rutina ─── */}
@@ -421,21 +425,23 @@ export default function DashboardEntrenador() {
 
                             <View style={styles.fieldGroup}>
                                 <Text style={styles.fieldLabel}>Ejercicios ({formRutina.idsEjercicios.length} seleccionados)</Text>
-                                {ejercicios.map(e => {
-                                    const sel = formRutina.idsEjercicios.includes(e.idEjercicio);
-                                    return (
-                                        <TouchableOpacity
-                                            key={e.idEjercicio}
-                                            style={[styles.ejercicioItem, sel && styles.ejercicioItemSel]}
-                                            onPress={() => toggleEjercicio(e.idEjercicio)}
-                                        >
-                                            <Text style={[styles.ejercicioItemText, sel && { color: Colors.black }]}>
-                                                {sel ? '✓ ' : '○ '}{e.nombre}
-                                            </Text>
-                                            <Text style={[styles.ejercicioItemSub, sel && { color: Colors.black }]}>{e.grupoMuscular}</Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between' }}>
+                                    {ejercicios.map(e => {
+                                        const sel = formRutina.idsEjercicios.includes(e.idEjercicio);
+                                        return (
+                                            <TouchableOpacity
+                                                key={e.idEjercicio}
+                                                style={[{ width: '23%' }, styles.ejercicioItem, sel && styles.ejercicioItemSel]}
+                                                onPress={() => toggleEjercicio(e.idEjercicio)}
+                                            >
+                                                <Text style={[styles.ejercicioItemText, sel && { color: Colors.black }]}>
+                                                    {sel ? '✓ ' : '○ '}{e.nombre}
+                                                </Text>
+                                                <Text style={[styles.ejercicioItemSub, sel && { color: Colors.black }]}>{e.grupoMuscular}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
                             </View>
 
                             <View style={styles.modalActions}>
@@ -554,7 +560,8 @@ const styles = StyleSheet.create({
     tabActive: { borderBottomColor: Colors.primary },
     tabLabel: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
     tabLabelActive: { color: Colors.primary, fontWeight: '600' },
-    content: { flex: 1, padding: 14 },
+    content: { flex: 1 },
+    pageInner: { width: '100%', maxWidth: 1100, paddingHorizontal: 16, paddingTop: 14 },
     statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
     statCard: { flex: 1, backgroundColor: Colors.surface, borderLeftWidth: 4, borderRadius: 10, padding: 14 },
     statIcon: { fontSize: 22, marginBottom: 4 },
@@ -575,8 +582,8 @@ const styles = StyleSheet.create({
     badgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
     empty: { color: Colors.textMuted, textAlign: 'center', fontSize: 14, paddingVertical: 10 },
     // Modal
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
-    modalCard: { backgroundColor: Colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+    modalCard: { backgroundColor: Colors.surface, borderRadius: 20, padding: 24, width: '50%', minWidth: 600, maxWidth: 900 },
     modalTitle: { color: Colors.text, fontWeight: 'bold', fontSize: 18, marginBottom: 20, textAlign: 'center' },
     fieldGroup: { marginBottom: 16 },
     fieldLabel: { color: Colors.textMuted, fontSize: 13, marginBottom: 8 },
@@ -585,7 +592,7 @@ const styles = StyleSheet.create({
     rolBtn: { paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#2c2c2c', borderWidth: 1, borderColor: '#444', borderRadius: 8 },
     rolBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     rolBtnText: { color: Colors.textMuted, fontSize: 13, fontWeight: '600' },
-    ejercicioItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2c2c2c', borderWidth: 1, borderColor: '#444', borderRadius: 8, padding: 10, marginBottom: 6 },
+    ejercicioItem: { backgroundColor: '#2c2c2c', borderWidth: 1, borderColor: '#444', borderRadius: 8, padding: 10, marginBottom: 6, minHeight: 60, justifyContent: 'center' },
     ejercicioItemSel: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     ejercicioItemText: { color: Colors.text, fontSize: 13, fontWeight: '600' },
     ejercicioItemSub: { color: Colors.textMuted, fontSize: 11 },

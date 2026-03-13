@@ -1,21 +1,57 @@
 // app/(tabs)/asistencia.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
-    TextInput, ScrollView, Alert, Platform, ActivityIndicator,
+    TextInput, ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import Colors from '../../src/theme/colors';
-import { MOCK_CLIENTES } from '../../src/services/mock/mockData';
 import asistenciaService, { AccesoResponse } from '../../src/services/asistencia.service';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 export default function AsistenciaScreen() {
     const [scanResult, setScanResult] = useState<null | { ok: boolean; msg: string }>(null);
     const [qrInput, setQrInput] = useState('');
-    const [scanning, setScanning] = useState(false);
     const [procesando, setProcesando] = useState(false);
-    const [useRealApi, setUseRealApi] = useState(true);
+    const [permission, requestPermission] = useCameraPermissions();
+    const [scanned, setScanned] = useState(false);
+
+    // Permitir volver a escanear después de un tiempo
+    useEffect(() => {
+        let timeout: NodeJS.Timeout;
+        if (scanned) {
+            timeout = setTimeout(() => {
+                setScanned(false);
+                setScanResult(null);
+            }, 5000); // 5 segundos de enfriamiento para no registrar doble
+        }
+        return () => clearTimeout(timeout);
+    }, [scanned]);
+
+    if (!permission) {
+        // Cargando permisos
+        return <View style={styles.safe} />;
+    }
+
+    if (!permission.granted) {
+        // No hay permisos
+        return (
+            <SafeAreaView style={styles.safe}>
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>Control de Acceso</Text>
+                    <Text style={styles.headerSub}>Scanner Acceso · Iron Fitness</Text>
+                </View>
+                <View style={styles.containerCenter}>
+                    <Text style={styles.mensajePermiso}>Necesitamos acceso a la cámara para escanear los códigos QR.</Text>
+                    <TouchableOpacity style={styles.btnPermiso} onPress={requestPermission}>
+                        <Text style={styles.btnPermisoText}>Otorgar Permiso</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     const procesarAccesoReal = async (idUsuario: number) => {
+        if (procesando) return;
         setProcesando(true);
         try {
             const res: AccesoResponse = await asistenciaService.escanear(idUsuario);
@@ -28,64 +64,45 @@ export default function AsistenciaScreen() {
             setScanResult({ ok: false, msg: `❌ Error: ${e.message}` });
         } finally {
             setProcesando(false);
-            setTimeout(() => setScanResult(null), 5000);
+            setScanned(true);
         }
     };
 
-    const procesarAccesoMock = (idStr: string) => {
-        const id = parseInt(idStr);
-        // En mock los IDs son id_cliente; para producción se usa id_usuario
-        const cliente = MOCK_CLIENTES.find(c => c.id_cliente === id || c.id_usuario === id);
-        if (!cliente) {
-            setScanResult({ ok: false, msg: `❌ ACCESO DENEGADO\nID ${id} no encontrado` });
-        } else if (cliente.estadoMembresia === 'Vencida') {
-            setScanResult({ ok: false, msg: `⚠️ MEMBRESÍA VENCIDA\n${cliente.nombre} ${cliente.apellido}\nDirigirse a recepción` });
-        } else {
-            setScanResult({ ok: true, msg: `✅ ACCESO PERMITIDO\n¡Bienvenido!\n${cliente.nombre} ${cliente.apellido}\n${cliente.nombrePlan}` });
+    const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+        if (scanned || procesando) return;
+        const id = parseInt(data);
+        if (isNaN(id) || id <= 0) {
+            setScanResult({ ok: false, msg: 'QR inválido. Intenta de nuevo.' });
+            setScanned(true);
+            return;
         }
-        setTimeout(() => setScanResult(null), 5000);
+        procesarAccesoReal(id);
     };
 
-    const procesarAcceso = (idStr: string) => {
-        const id = parseInt(idStr);
+    const procesarAccesoManual = () => {
+        const id = parseInt(qrInput.trim());
         if (isNaN(id) || id <= 0) {
             Alert.alert('', 'Ingresa un ID válido');
             return;
         }
         setQrInput('');
-        if (useRealApi) {
-            procesarAccesoReal(id);
-        } else {
-            procesarAccesoMock(idStr);
-        }
+        procesarAccesoReal(id);
     };
 
-    const simularEscaneo = () => {
-        setScanning(true);
-        setTimeout(() => {
-            setScanning(false);
-            const rand = MOCK_CLIENTES[Math.floor(Math.random() * MOCK_CLIENTES.length)];
-            // id_usuario es lo que el backend espera
-            procesarAcceso(String(rand.id_usuario));
-        }, 1500);
-    };
-
-    // Círculo de estado como en EscanerRecepcion.html: esperando / entrada / salida / error
     const estadoCirculo = !scanResult
         ? 'esperando'
         : scanResult.ok
-            ? (scanResult.msg.includes('Hasta luego') || scanResult.msg.includes('SALIDA') ? 'salida' : 'entrada')
+            ? (scanResult.msg.includes('SALIDA') ? 'salida' : 'entrada')
             : 'error';
 
     return (
         <SafeAreaView style={styles.safe}>
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>SIMULADOR TORNIQUETE</Text>
+                <Text style={styles.headerTitle}>Control de Acceso</Text>
                 <Text style={styles.headerSub}>Scanner Acceso · Iron Fitness</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                {/* Caja central como EscanerRecepcion.html */}
                 <View style={styles.scannerBox}>
                     <View style={[
                         styles.statusCircle,
@@ -94,102 +111,66 @@ export default function AsistenciaScreen() {
                         estadoCirculo === 'error' && styles.statusCircleError,
                     ]}>
                         <Text style={styles.statusIcon}>
-                            {estadoCirculo === 'esperando' && '🔒'}
+                            {estadoCirculo === 'esperando' && '📷'}
                             {estadoCirculo === 'entrada' && '👋'}
                             {estadoCirculo === 'salida' && '🚪'}
                             {estadoCirculo === 'error' && '⚠️'}
                         </Text>
                     </View>
                     <Text style={styles.mensajePrincipal}>
-                        {scanResult ? scanResult.msg : (procesando ? 'Procesando...' : 'Esperando QR...')}
+                        {scanResult ? scanResult.msg : (procesando ? 'Procesando...' : 'Escanea un código QR')}
                     </Text>
 
-                    <View style={styles.inputGroup}>
-                        <View style={styles.inputGroupLabel}>
-                            <Text style={styles.inputGroupLabelText}>ID</Text>
-                        </View>
+                    <View style={styles.cameraContainer}>
+                        <CameraView
+                            style={styles.camera}
+                            facing="back"
+                            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+                            barcodeScannerSettings={{
+                                barcodeTypes: ["qr"],
+                            }}
+                        />
+                        {scanned && (
+                            <View style={styles.overlay}>
+                                {scanResult && (
+                                    <View style={[styles.resultOverlayBox, {
+                                        borderColor: scanResult.ok ? Colors.success : Colors.danger,
+                                        backgroundColor: scanResult.ok ? 'rgba(26, 61, 43, 0.9)' : 'rgba(61, 26, 26, 0.9)',
+                                    }]}>
+                                        <Text style={[styles.resultText, { color: scanResult.ok ? Colors.success : Colors.danger }]}>
+                                            {scanResult.msg}
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        )}
+                    </View>
+
+                    {scanned && !procesando && (
+                        <TouchableOpacity style={styles.simBtn} onPress={() => { setScanned(false); setScanResult(null); }}>
+                             <Text style={styles.simBtnText}>📸 Escanear nuevo código</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                <View style={{ padding: 16 }}>
+                    <Text style={styles.sectionTitle}>Ingresar ID manualmente</Text>
+                    <Text style={styles.sectionHint}>En caso de problemas con la cámara</Text>
+                    
+                    <View style={styles.manualRow}>
                         <TextInput
-                            style={[styles.input, styles.inputGroupInput]}
-                            placeholder="Ej: 7"
+                            style={styles.input}
+                            placeholder="ID usuario (ej: 4)"
                             placeholderTextColor="#666"
                             value={qrInput}
                             onChangeText={setQrInput}
                             keyboardType="numeric"
                             editable={!procesando}
                         />
-                    </View>
-
-                    <TouchableOpacity
-                        style={[styles.simBtn, (scanning || procesando) && styles.simBtnDisabled]}
-                        onPress={() => {
-                            if (qrInput.trim()) {
-                                procesarAcceso(qrInput.trim());
-                            } else {
-                                simularEscaneo();
-                            }
-                        }}
-                        disabled={scanning || procesando}
-                    >
-                        {procesando
-                            ? <ActivityIndicator color={Colors.black} />
-                            : <Text style={styles.simBtnText}>
-                                {qrInput.trim() ? '💥 SIMULAR ESCANEO' : '💥 SIMULAR ESCANEO (aleatorio)'}
-                            </Text>
-                        }
-                    </TouchableOpacity>
-                </View>
-
-                {/* Resultado detalle */}
-                {scanResult && (
-                    <View style={[styles.resultBox, {
-                        borderColor: scanResult.ok ? Colors.success : Colors.danger,
-                        backgroundColor: scanResult.ok ? '#1a3d2b' : '#3d1a1a',
-                    }]}>
-                        <Text style={[styles.resultText, { color: scanResult.ok ? Colors.success : Colors.danger }]}>
-                            {scanResult.msg}
-                        </Text>
-                    </View>
-                )}
-
-                <View style={{ padding: 16 }}>
-                    {/* Toggle API/Mock */}
-                    <View style={styles.toggleRow}>
-                        <Text style={styles.toggleLabel}>Fuente:</Text>
-                        <TouchableOpacity
-                            style={[styles.toggleBtn, useRealApi && styles.toggleBtnActive]}
-                            onPress={() => setUseRealApi(true)}
-                        >
-                            <Text style={[styles.toggleText, useRealApi && styles.toggleTextActive]}>🟢 API Real</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.toggleBtn, !useRealApi && styles.toggleBtnActive]}
-                            onPress={() => setUseRealApi(false)}
-                        >
-                            <Text style={[styles.toggleText, !useRealApi && styles.toggleTextActive]}>🔵 Mock</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Validar ID manual */}
-                    <Text style={styles.sectionTitle}>Ingresar ID manualmente</Text>
-                    <Text style={styles.sectionHint}>
-                        {useRealApi ? 'id_usuario del cliente (ej: 4)' : 'id_cliente mock (ej: 1)'}
-                    </Text>
-                    <View style={styles.manualRow}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder={useRealApi ? "ID usuario (ej: 4)" : "ID cliente (ej: 1)"}
-                            placeholderTextColor="#666"
-                            value={qrInput}
-                            onChangeText={setQrInput}
-                            keyboardType="numeric"
-                        />
                         <TouchableOpacity
                             style={styles.validateBtn}
-                            onPress={() => {
-                                if (qrInput) procesarAcceso(qrInput);
-                                else Alert.alert('', 'Ingresa un ID');
-                            }}
-                            disabled={procesando}
+                            onPress={procesarAccesoManual}
+                            disabled={procesando || !qrInput.trim()}
                         >
                             {procesando
                                 ? <ActivityIndicator color={Colors.black} size="small" />
@@ -197,41 +178,6 @@ export default function AsistenciaScreen() {
                             }
                         </TouchableOpacity>
                     </View>
-
-                    {/* Clientes de referencia */}
-                    <Text style={styles.sectionTitle}>Clientes registrados (mock referencia)</Text>
-                    <Text style={styles.sectionHint}>Tap para probar con ID de usuario</Text>
-                    {MOCK_CLIENTES.map(c => (
-                        <TouchableOpacity
-                            key={c.id_cliente}
-                            style={styles.clienteRow}
-                            onPress={() => procesarAcceso(String(c.id_usuario))}
-                            disabled={procesando}
-                        >
-                            <View style={[styles.avatar, { backgroundColor: c.estadoMembresia === 'Activa' ? Colors.success : Colors.danger }]}>
-                                <Text style={styles.avatarText}>{c.nombre[0]}</Text>
-                            </View>
-                            <View style={{ flex: 1, marginLeft: 10 }}>
-                                <Text style={styles.clienteNombre}>{c.nombre} {c.apellido}</Text>
-                                <Text style={styles.clienteSub}>{c.nombrePlan} · {c.estadoMembresia}</Text>
-                                <Text style={[styles.clienteSub, { color: '#666', fontSize: 11 }]}>
-                                    id_usuario: {c.id_usuario} · id_cliente: {c.id_cliente}
-                                </Text>
-                            </View>
-                            <Text style={{ color: Colors.primary, fontSize: 12, fontWeight: '600' }}>
-                                {procesando ? '⏳' : 'Scan →'}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-
-                    {useRealApi && (
-                        <View style={styles.infoBox}>
-                            <Text style={styles.infoText}>
-                                ℹ️ En producción el backend usa <Text style={{ color: Colors.primary }}>id_usuario</Text>.
-                                Los usuarios reales del backend: recep=id_usuario:2, coach=3, juan=4, etc.
-                            </Text>
-                        </View>
-                    )}
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -240,6 +186,10 @@ export default function AsistenciaScreen() {
 
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: Colors.background },
+    containerCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+    mensajePermiso: { color: Colors.text, textAlign: 'center', marginBottom: 20, fontSize: 16 },
+    btnPermiso: { backgroundColor: Colors.primary, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8 },
+    btnPermisoText: { color: Colors.black, fontWeight: 'bold', fontSize: 16 },
     scrollContent: { paddingBottom: 30 },
     header: { backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: 16, paddingVertical: 14 },
     headerTitle: { color: Colors.primary, fontWeight: 'bold', fontSize: 20 },
@@ -267,29 +217,33 @@ const styles = StyleSheet.create({
     statusCircleError: { backgroundColor: '#e67700' },
     statusIcon: { fontSize: 32 },
     mensajePrincipal: { color: Colors.textMuted, fontSize: 16, marginBottom: 20, textAlign: 'center' },
-    inputGroup: { flexDirection: 'row', width: '100%', marginBottom: 16 },
-    inputGroupLabel: {
-        backgroundColor: '#444',
-        borderWidth: 1,
-        borderRightWidth: 0,
-        borderColor: '#555',
-        paddingHorizontal: 14,
-        justifyContent: 'center',
-        borderTopLeftRadius: 8,
-        borderBottomLeftRadius: 8,
+    cameraContainer: {
+        width: 250,
+        height: 250,
+        borderRadius: 12,
+        overflow: 'hidden',
+        borderWidth: 2,
+        borderColor: Colors.primary,
+        marginBottom: 20,
+        position: 'relative'
     },
-    inputGroupLabelText: { color: Colors.text, fontWeight: '600', fontSize: 14 },
-    resultBox: { margin: 16, padding: 16, borderWidth: 2, borderRadius: 12 },
+    camera: {
+        flex: 1,
+    },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    resultOverlayBox: {
+        padding: 16,
+        borderWidth: 2,
+        borderRadius: 12,
+        width: '80%',
+    },
     resultText: { fontWeight: '700', fontSize: 15, textAlign: 'center', lineHeight: 22 },
-    toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-    toggleLabel: { color: Colors.textMuted, fontSize: 13 },
-    toggleBtn: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: '#444', backgroundColor: '#2c2c2c' },
-    toggleBtnActive: { borderColor: Colors.primary, backgroundColor: 'rgba(255,193,7,0.15)' },
-    toggleText: { color: Colors.textMuted, fontSize: 12, fontWeight: '600' },
-    toggleTextActive: { color: Colors.primary },
-    inputGroupInput: { flex: 1, borderTopRightRadius: 8, borderBottomRightRadius: 8, borderWidth: 1, borderColor: '#555', marginLeft: 0 },
     simBtn: { backgroundColor: Colors.primary, borderRadius: 12, padding: 18, alignItems: 'center', width: '100%' },
-    simBtnDisabled: { opacity: 0.7 },
     simBtnText: { color: Colors.black, fontWeight: '800', fontSize: 16 },
     sectionTitle: { color: Colors.text, fontWeight: '700', fontSize: 15, marginBottom: 4 },
     sectionHint: { color: Colors.textMuted, fontSize: 11, marginBottom: 10 },
@@ -297,11 +251,4 @@ const styles = StyleSheet.create({
     input: { flex: 1, backgroundColor: '#2c2c2c', borderWidth: 1, borderColor: '#444', borderRadius: 10, padding: 12, color: Colors.text, fontSize: 15 },
     validateBtn: { backgroundColor: Colors.primary, borderRadius: 10, paddingHorizontal: 18, justifyContent: 'center', alignItems: 'center', minWidth: 80 },
     validateText: { color: Colors.black, fontWeight: '700' },
-    clienteRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
-    avatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-    avatarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-    clienteNombre: { color: Colors.text, fontWeight: '600', fontSize: 14 },
-    clienteSub: { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
-    infoBox: { backgroundColor: '#1a1a1a', borderLeftWidth: 3, borderLeftColor: Colors.primary, borderRadius: 8, padding: 12, marginTop: 12 },
-    infoText: { color: Colors.textMuted, fontSize: 12, lineHeight: 18 },
 });

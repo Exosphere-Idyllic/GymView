@@ -61,18 +61,9 @@ export default function CatalogoScreen() {
             setProductos(data);
             setFiltrados(data);
         } catch (e: any) {
-            setError(e.message || 'No se pudo cargar el catálogo');
-            // Mock productos para demo
-            const mock: Producto[] = [
-                { idProducto: 1, nombre: 'Proteína Whey Gold', descripcion: 'Proteína de suero de leche premium, 2kg. Aumenta tu masa muscular con la mejor calidad.', precio: 49.99, tipo: 'venta' },
-                { idProducto: 2, nombre: 'Creatina Monohidratada', descripcion: 'Creatina pura de alta pureza, 500g. Mejora tu rendimiento y fuerza en cada entreno.', precio: 24.99, tipo: 'venta' },
-                { idProducto: 3, nombre: 'Guantes de Entrenamiento', descripcion: 'Guantes de cuero sintético con muñequera reforzada. Talla M/L/XL disponibles.', precio: 19.99, tipo: 'venta' },
-                { idProducto: 4, nombre: 'Cinturón Lumbar', descripcion: 'Protección lumbar profesional para levantamiento de pesas. Cuero genuino.', precio: 34.99, tipo: 'venta' },
-                { idProducto: 5, nombre: 'Barra Olímpica 20kg', descripcion: 'Barra olímpica profesional de acero cromado. Uso exclusivo en instalaciones.', precio: 0, tipo: 'uso' },
-                { idProducto: 6, nombre: 'Mancuernas Hex (par)', descripcion: 'Mancuernas hexagonales de goma, disponibles de 5kg a 50kg. Uso en gimnasio.', precio: 0, tipo: 'uso' },
-            ];
-            setProductos(mock);
-            setFiltrados(mock);
+            setError(e.message || 'Error de conexión. No se pudo cargar el catálogo.');
+            setProductos([]);
+            setFiltrados([]);
         } finally {
             setLoading(false);
         }

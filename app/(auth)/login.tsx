@@ -149,14 +149,7 @@ export default function LoginScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Hint usuarios reales */}
-                    <View style={styles.demoBox}>
-                        <Text style={styles.demoTitle}>👆 Usuarios del sistema</Text>
-                        <Text style={styles.demoText}>Usa las credenciales registradas en la base de datos.</Text>
-                        <Text style={[styles.demoText, { marginTop: 6, color: Colors.textMuted }]}>
-                            Sin conexión: admin/1234 · recep/1234 · coach/1234 · juan/1234
-                        </Text>
-                    </View>
+
                 </View>
 
                 <Text style={styles.footer}>Iron Fitness © 2026 – Quito, Ecuador</Text>

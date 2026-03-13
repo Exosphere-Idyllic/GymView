@@ -1,12 +1,32 @@
 // app/clientes/index.tsx
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../../src/theme/colors';
-import { MOCK_CLIENTES } from '../../src/services/mock/mockData';
+import authService, { AdminUsuario } from '../../src/services/auth.service';
 
 export default function ClientesIndex() {
   const router = useRouter();
+  const [clientes, setClientes] = useState<AdminUsuario[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const cargarClientes = useCallback(async () => {
+    try {
+      setLoading(true);
+      const usuarios = await authService.getUsuariosAdmin();
+      // Filtrar aquellos que sean clientes (idRol 4 o rol 'cliente')
+      const soloClientes = usuarios.filter(u => u.rol === 'cliente' || u.rol === 'Cliente');
+      setClientes(soloClientes);
+    } catch (e) {
+      console.error('Error cargando clientes:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarClientes();
+  }, [cargarClientes]);
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -15,20 +35,32 @@ export default function ClientesIndex() {
         <TouchableOpacity onPress={() => router.push('/clientes/crear')} style={styles.addBtn}><Text style={styles.addText}>+ Nuevo</Text></TouchableOpacity>
       </View>
       <ScrollView style={{ padding: 14 }}>
-        {MOCK_CLIENTES.map(c => (
-          <TouchableOpacity key={c.id_cliente} style={styles.card} onPress={() => router.push(`/clientes/${c.id_cliente}`)}>
-            <View style={styles.row}>
-              <View style={styles.avatar}><Text style={styles.avatarText}>{c.nombre[0]}</Text></View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.name}>{c.nombre} {c.apellido}</Text>
-                <Text style={styles.sub}>{c.email}</Text>
-              </View>
-              <View style={[styles.badge, { backgroundColor: c.estadoMembresia === 'Activa' ? Colors.success : Colors.danger }]}>
-                <Text style={styles.badgeText}>{c.estadoMembresia}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+        {loading ? (
+             <View style={{ marginTop: 40, alignItems: 'center' }}>
+                 <ActivityIndicator color={Colors.primary} size="large" />
+                 <Text style={{ color: Colors.textMuted, marginTop: 10 }}>Cargando clientes...</Text>
+             </View>
+        ) : clientes.length === 0 ? (
+            <Text style={{ color: Colors.textMuted, textAlign: 'center', marginTop: 40 }}>No hay clientes registrados.</Text>
+        ) : (
+            clientes.map(c => {
+              const estaActivo = c.membresia && c.membresia !== 'Inactiva' && c.membresia !== 'Ninguna';
+              return (
+                <TouchableOpacity key={c.id} style={styles.card} onPress={() => router.push(`/clientes/${c.id}`)}>
+                  <View style={styles.row}>
+                    <View style={styles.avatar}><Text style={styles.avatarText}>{c.nombre ? c.nombre[0] : 'U'}</Text></View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={styles.name}>{c.nombre} {c.apellido}</Text>
+                      <Text style={styles.sub}>{c.email || 'Sin correo'}</Text>
+                    </View>
+                    <View style={[styles.badge, { backgroundColor: estaActivo ? Colors.success : Colors.danger }]}>
+                      <Text style={styles.badgeText}>{estaActivo ? 'Activa' : 'Vencida/Inactiva'}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+        )}
       </ScrollView>
     </SafeAreaView>
   );

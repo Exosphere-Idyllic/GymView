@@ -8,6 +8,7 @@ import asistenciaService, { AccesoResponse } from '../../services/asistencia.ser
 import membresiaService, { PLANES_MEMBRESIA } from '../../services/membresia.service';
 import apiClient from '../../services/api.client';
 import { API_CONFIG } from '../../config/api.config';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 type Tab = 'resumen' | 'acceso' | 'socios' | 'pagos';
 
@@ -48,6 +49,10 @@ export default function DashboardRecepcionista() {
   const [buscandoEstado, setBuscandoEstado] = useState(false);
   const { user, logout } = useAuth();
   const router = useRouter();
+
+  // ── Permisos Cámara ─────────────────────────────────────────
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
 
   // ── Estado API ──────────────────────────────────────────────
   const [reporteDia, setReporteDia] = useState<ReporteDia | null>(null);
@@ -146,8 +151,24 @@ export default function DashboardRecepcionista() {
       setScanResult({ ok: false, msg: `❌ ${e.message}` });
     } finally {
       setProcesando(false);
-      setTimeout(() => setScanResult(null), 5000);
+      setTimeout(() => {
+          setScanResult(null);
+          setScanned(false); // Reactivar escáner de cámara
+      }, 5000);
     }
+  };
+
+  const onBarcodeScanned = ({ data }: { data: string }) => {
+      if (scanned || procesando) return;
+      setScanned(true);
+      // Soporta formato "IRON_13" o directamente "13"
+      const idStr = data.toUpperCase().startsWith('IRON_')
+          ? data.substring(5)
+          : data;
+      setQrInput(idStr);
+      buscarEstadoCliente(idStr).then(() => {
+          setTimeout(() => procesarEscaneo(idStr), 1500);
+      });
   };
 
   const asignarMembresia = async (idPlan: number) => {
@@ -187,7 +208,8 @@ export default function DashboardRecepcionista() {
         ))}
       </ScrollView>
 
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 30 }}>
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 30, alignItems: 'center' }}>
+        <View style={styles.pageInner}>
 
         {/* ─── RESUMEN ─── */}
         {activeTab === 'resumen' && (
@@ -244,13 +266,34 @@ export default function DashboardRecepcionista() {
 
         {/* ─── ACCESO QR ─── */}
         {activeTab === 'acceso' && (
-          <View style={{ alignItems: 'center' }}>
-            <View style={styles.scannerBox}>
-              <Text style={{ fontSize: 64 }}>📷</Text>
-              <Text style={styles.scannerLabel}>Escáner Activo</Text>
-              <Text style={styles.scannerSub}>
-                {procesando ? 'Procesando...' : 'Ingresa el ID de usuario para registrar acceso'}
-              </Text>
+          <>
+            <View style={[styles.scannerBox, { padding: 0, overflow: 'hidden' }]}>
+                {!permission?.granted ? (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                        <Text style={{ fontSize: 48, marginBottom: 10 }}>📷</Text>
+                        <Text style={styles.scannerLabel}>Solicitando Cámara</Text>
+                        <Text style={[styles.scannerSub, { textAlign: 'center', marginBottom: 20 }]}>Se requieren permisos para escanear QR</Text>
+                        <TouchableOpacity style={styles.validateBtn} onPress={requestPermission}>
+                            <Text style={styles.validateBtnText}>Dar Permiso</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <CameraView
+                        style={StyleSheet.absoluteFillObject}
+                        facing="back"
+                        onBarcodeScanned={scanned ? undefined : onBarcodeScanned}
+                        barcodeScannerSettings={{
+                            barcodeTypes: ["qr"],
+                        }}
+                    >
+                        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+                            <View style={{ width: 200, height: 200, borderWidth: 2, borderColor: scanned ? Colors.success : Colors.primary, borderRadius: 10, backgroundColor: 'transparent' }} />
+                            <Text style={{ color: '#fff', marginTop: 20, fontWeight: 'bold' }}>
+                                {scanned ? "Procesando código..." : "Centra el QR aquí"}
+                            </Text>
+                        </View>
+                    </CameraView>
+                )}
             </View>
 
             {scanResult && (
@@ -312,7 +355,7 @@ export default function DashboardRecepcionista() {
                 }
               </TouchableOpacity>
             </View>
-          </View>
+          </>
         )}
 
         {/* ─── PRESENTES ─── */}
@@ -397,7 +440,7 @@ export default function DashboardRecepcionista() {
             )}
           </>
         )}
-
+        </View>{/* end pageInner */}
       </ScrollView>
 
       {/* ─── Modal Asignar Membresía ─── */}
@@ -446,7 +489,8 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomColor: Colors.primary },
   tabLabel: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
   tabLabelActive: { color: Colors.primary, fontWeight: '600' },
-  content: { flex: 1, padding: 14 },
+  content: { flex: 1 },
+  pageInner: { width: '100%', maxWidth: 1100, paddingHorizontal: 16, paddingTop: 14 },
   actionsGrid: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   actionCard: { flex: 1, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.primary, borderRadius: 12, padding: 14, alignItems: 'center' },
   actionIcon: { fontSize: 28, marginBottom: 6 },
@@ -464,15 +508,15 @@ const styles = StyleSheet.create({
   rowSub: { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
   rowTime: { color: Colors.textMuted, fontSize: 12, fontWeight: 'bold' },
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: Colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalCard: { backgroundColor: Colors.surface, borderRadius: 20, padding: 24, width: '100%', maxWidth: 620 },
   modalTitle: { color: Colors.text, fontWeight: 'bold', fontSize: 18, marginBottom: 20, textAlign: 'center' },
   cancelBtn: { backgroundColor: 'transparent', paddingVertical: 12, alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: '#444' },
   cancelText: { color: Colors.textMuted, fontWeight: '600', fontSize: 14 },
   card: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 14, marginBottom: 10 },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
   avatarText: { color: Colors.black, fontWeight: 'bold', fontSize: 16 },
-  scannerBox: { backgroundColor: '#111', borderWidth: 2, borderColor: Colors.primary, borderRadius: 20, padding: 40, alignItems: 'center', marginBottom: 16, width: '100%' },
+  scannerBox: { backgroundColor: '#111', borderWidth: 2, borderColor: Colors.primary, borderRadius: 20, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginBottom: 16, width: '100%', maxWidth: 700, alignSelf: 'center', height: 300 },
   scannerLabel: { color: Colors.text, fontSize: 18, fontWeight: 'bold', marginTop: 10 },
   scannerSub: { color: Colors.textMuted, fontSize: 13, marginTop: 4, textAlign: 'center' },
   scanResult: { borderWidth: 2, borderRadius: 12, padding: 16, marginBottom: 12, width: '100%' },

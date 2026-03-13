@@ -1,26 +1,85 @@
 // app/clientes/[id].tsx
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '../../src/theme/colors';
-import { MOCK_CLIENTES, MOCK_RUTINAS, MOCK_ASISTENCIAS, MOCK_PAGOS } from '../../src/services/mock/mockData';
+import apiClient from '../../src/services/api.client';
+import { API_CONFIG } from '../../src/config/api.config';
 
 export default function ClienteDetalle() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const cliente = MOCK_CLIENTES.find(c => c.id_cliente === parseInt(id));
+
+  const [cliente, setCliente] = useState<any>(null);
+  const [rutinas, setRutinas] = useState<any[]>([]);
+  const [asistencias, setAsistencias] = useState<any[]>([]);
+  const [pagos, setPagos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const cargarDatosCliente = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Peticiones al backend en paralelo
+      const [clienteData, dashboardData, pagosData, historialData] = await Promise.all([
+        // Info basica del usuario
+        apiClient.get(API_CONFIG.ENDPOINTS.USUARIOS.BY_ID(parseInt(id))),
+        // Info del dashboard cliente (rutinas, membresia activa)
+        apiClient.get(API_CONFIG.ENDPOINTS.CLIENTES.DASHBOARD(parseInt(id))).catch(() => null),
+        // Pagos del cliente
+        apiClient.get(API_CONFIG.ENDPOINTS.CLIENTES.PAGOS(parseInt(id))).catch(() => []),
+        // Historial asistencias
+        apiClient.get(API_CONFIG.ENDPOINTS.ACCESOS.HISTORIAL(parseInt(id))).catch(() => [])
+      ]);
+
+      // Unificar data con verificación de tipos para evitar errores de lint
+      const cliData = (clienteData as any) || {};
+      const dashData = (dashboardData as any) || {};
+
+      const cli = {
+        ...cliData,
+        estadoMembresia: dashData?.estadoMembresia || 'Desconocido',
+        nombrePlan: dashData?.nombrePlan || 'N/A',
+        fecha_vencimiento: dashData?.vencimiento || 'N/A'
+      };
+
+      setCliente(cli);
+      setRutinas(dashData?.rutinaActual ? [dashData.rutinaActual] : []);
+      setPagos(Array.isArray(pagosData) ? pagosData : []);
+      setAsistencias(Array.isArray(historialData) ? historialData : []);
+    } catch (error) {
+      console.error('Error al cargar detalle cliente:', error);
+      Alert.alert('Error', 'No se pudieron recuperar los datos del cliente desde el servidor.');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    cargarDatosCliente();
+  }, [cargarDatosCliente]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={{ color: Colors.text, marginTop: 10 }}>Cargando información del cliente...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!cliente) return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()}><Text style={styles.back}>← Volver</Text></TouchableOpacity>
+      </View>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: Colors.text }}>Cliente no encontrado</Text>
+        <Text style={{ color: Colors.text }}>Cliente no encontrado en la base de datos.</Text>
       </View>
     </SafeAreaView>
   );
 
-  const rutinas = MOCK_RUTINAS.filter(r => r.id_cliente === cliente.id_cliente);
-  const asistencias = MOCK_ASISTENCIAS.filter(a => a.id_cliente === cliente.id_cliente);
-  const pagos = MOCK_PAGOS.filter(p => p.id_cliente === cliente.id_cliente);
   const activa = cliente.estadoMembresia === 'Activa';
 
   return (
@@ -64,10 +123,10 @@ export default function ClienteDetalle() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Rutinas Asignadas ({rutinas.length})</Text>
           {rutinas.length === 0 ? <Text style={styles.empty}>Sin rutinas asignadas</Text>
-            : rutinas.map(r => (
-              <View key={r.id_rutina} style={styles.chip}>
-                <Text style={styles.chipTitle}>🏋️ {r.nombre_rutina}</Text>
-                <Text style={styles.chipSub}>{r.ejercicios.length} ejercicios · {r.fecha_creacion}</Text>
+            : rutinas.map((r, idx) => (
+              <View key={r.idRutina || idx} style={styles.chip}>
+                <Text style={styles.chipTitle}>🏋️ {r.nombreRutina || r.nombre_rutina}</Text>
+                <Text style={styles.chipSub}>{r.ejercicios?.length || 0} ejercicios activos</Text>
               </View>
             ))
           }
@@ -76,10 +135,11 @@ export default function ClienteDetalle() {
         {/* Asistencias */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Historial de Asistencia ({asistencias.length})</Text>
-          {asistencias.slice(0, 5).map(a => (
-            <View key={a.id_asistencia} style={styles.row}>
-              <Text style={styles.rowLabel}>{new Date(a.fecha_hora_ingreso).toLocaleDateString('es')}</Text>
-              <Text style={styles.rowVal}>{new Date(a.fecha_hora_ingreso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</Text>
+          {asistencias.length === 0 ? <Text style={styles.empty}>Sin registros de asistencia</Text> 
+            : asistencias.slice(0, 5).map((a, idx) => (
+            <View key={a.id_asistencia || idx} style={styles.row}>
+              <Text style={styles.rowLabel}>{new Date(a.fecha_hora_ingreso || a.fechaHoraIngreso).toLocaleDateString('es')}</Text>
+              <Text style={styles.rowVal}>{new Date(a.fecha_hora_ingreso || a.fechaHoraIngreso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</Text>
             </View>
           ))}
         </View>
@@ -87,16 +147,17 @@ export default function ClienteDetalle() {
         {/* Pagos */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Historial de Pagos ({pagos.length})</Text>
-          {pagos.map(p => (
-            <View key={p.id_pago} style={styles.row}>
-              <Text style={styles.rowLabel}>{p.fecha_pago} · {p.metodo_pago}</Text>
-              <Text style={[styles.rowVal, { color: Colors.success }]}>${p.monto}</Text>
+          {pagos.length === 0 ? <Text style={styles.empty}>Sin pagos registrados</Text>
+            : pagos.map((p, idx) => (
+            <View key={p.id_pago || idx} style={styles.row}>
+              <Text style={styles.rowLabel}>{new Date(p.fecha_pago || p.fechaPago).toLocaleDateString('es')} · {p.metodo_pago || p.metodoPago || 'EFECTIVO'}</Text>
+              <Text style={[styles.rowVal, { color: Colors.success }]}>${p.monto_pagado || p.montoPagado || p.monto || '0.00'}</Text>
             </View>
           ))}
         </View>
 
         {/* Acciones */}
-        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.danger }]} onPress={() => Alert.alert('Inactivar', 'Se conectará al API')}>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.danger }]} onPress={() => Alert.alert('Información', 'Para inactivar a un cliente, edite su usuario desde la tabla de Administración.')}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>⛔ Inactivar Cliente</Text>
         </TouchableOpacity>
       </ScrollView>

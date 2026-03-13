@@ -1,12 +1,31 @@
 // app/entrenadores/index.tsx
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../../src/theme/colors';
-import { MOCK_ENTRENADORES } from '../../src/services/mock/mockData';
+import authService, { AdminUsuario } from '../../src/services/auth.service';
 
 export default function EntrenadoresIndex() {
     const router = useRouter();
+    const [entrenadores, setEntrenadores] = useState<AdminUsuario[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const cargarEntrenadores = useCallback(async () => {
+        try {
+            setLoading(true);
+            const usuarios = await authService.getUsuariosAdmin();
+            const soloEntrenadores = usuarios.filter(u => u.rol?.toLowerCase() === 'entrenador');
+            setEntrenadores(soloEntrenadores);
+        } catch (e) {
+            console.error('Error cargando entrenadores:', e);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        cargarEntrenadores();
+    }, [cargarEntrenadores]);
 
     return (
         <SafeAreaView style={styles.safe}>
@@ -24,34 +43,39 @@ export default function EntrenadoresIndex() {
             </View>
 
             <ScrollView style={{ padding: 14 }}>
-                {MOCK_ENTRENADORES.map(e => (
-                    <TouchableOpacity
-                        key={e.id_entrenador}
-                        style={styles.card}
-                        onPress={() => router.push(`/entrenadores/${e.id_entrenador}`)}
-                    >
-                        <View style={styles.row}>
-                            <View style={styles.avatar}>
-                                <Text style={styles.avatarText}>{e.nombre[0]}</Text>
-                            </View>
-                            <View style={{ flex: 1, marginLeft: 12 }}>
-                                <Text style={styles.name}>{e.nombre} {e.apellido}</Text>
-                                <Text style={styles.sub}>{e.email}</Text>
-                                <Text style={styles.especialidad}>💪 {e.especialidad}</Text>
-                            </View>
-                            <View style={styles.statsCol}>
-                                <View style={styles.statRow}>
-                                    <Text style={styles.statLabel}>Alumnos:</Text>
-                                    <Text style={styles.statVal}>{e.totalAlumnos}</Text>
+                {loading ? (
+                    <View style={{ marginTop: 40, alignItems: 'center' }}>
+                        <ActivityIndicator color={Colors.primary} size="large" />
+                        <Text style={{ color: Colors.textMuted, marginTop: 10 }}>Cargando entrenadores...</Text>
+                    </View>
+                ) : entrenadores.length === 0 ? (
+                    <Text style={{ color: Colors.textMuted, textAlign: 'center', marginTop: 40 }}>No hay entrenadores registrados.</Text>
+                ) : (
+                    entrenadores.map(e => (
+                        <TouchableOpacity
+                            key={e.id}
+                            style={styles.card}
+                            onPress={() => router.push(`/entrenadores/${e.id}`)}
+                        >
+                            <View style={styles.row}>
+                                <View style={styles.avatar}>
+                                    <Text style={styles.avatarText}>{e.nombre ? e.nombre[0] : 'E'}</Text>
                                 </View>
-                                <View style={styles.statRow}>
-                                    <Text style={styles.statLabel}>Rutinas:</Text>
-                                    <Text style={styles.statVal}>{e.rutinasCreadas}</Text>
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                    <Text style={styles.name}>{e.nombre} {e.apellido}</Text>
+                                    <Text style={styles.sub}>{e.email || 'Sin correo'}</Text>
+                                    <Text style={styles.especialidad}>💪 Coach</Text>
+                                </View>
+                                <View style={styles.statsCol}>
+                                    <View style={styles.statRow}>
+                                        <Text style={styles.statLabel}>Estado:</Text>
+                                        <Text style={[styles.statVal, { color: Colors.success }]}>Activo</Text>
+                                    </View>
                                 </View>
                             </View>
-                        </View>
-                    </TouchableOpacity>
-                ))}
+                        </TouchableOpacity>
+                    ))
+                )}
             </ScrollView>
         </SafeAreaView>
     );

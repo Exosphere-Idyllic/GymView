@@ -1,25 +1,69 @@
 // app/entrenadores/[id].tsx
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '../../src/theme/colors';
-import { MOCK_ENTRENADORES, MOCK_CLIENTES, MOCK_RUTINAS } from '../../src/services/mock/mockData';
+import entrenadoresService, { EntrenadorDashboard, AlumnoResumen, RutinaItem } from '../../src/services/entrenadores.service';
+import apiClient from '../../src/services/api.client';
+import { API_CONFIG } from '../../src/config/api.config';
 
 export default function EntrenadorDetalle() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
-    const entrenador = MOCK_ENTRENADORES.find(e => e.id_entrenador === parseInt(id));
+    
+    const [dashboard, setDashboard] = useState<EntrenadorDashboard | null>(null);
+    const [userInfo, setUserInfo] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
-    if (!entrenador) return (
+    const cargarEntrenador = useCallback(async () => {
+        try {
+            setLoading(true);
+            const [dashData, userData] = await Promise.all([
+                entrenadoresService.getDashboard(parseInt(id)).catch(() => null),
+                apiClient.get(API_CONFIG.ENDPOINTS.USUARIOS.BY_ID(parseInt(id))).catch(() => null)
+            ]);
+            setDashboard(dashData);
+            setUserInfo(userData);
+        } catch (error) {
+            console.error('Error cargando entrenador:', error);
+            Alert.alert('Error', 'No se pudo recuperar la información del entrenador.');
+        } finally {
+            setLoading(false);
+        }
+    }, [id]);
+
+    useEffect(() => {
+        cargarEntrenador();
+    }, [cargarEntrenador]);
+
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.safe}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={Colors.primary} />
+                    <Text style={{ color: Colors.text, marginTop: 10 }}>Cargando perfil del entrenador...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (!dashboard && !userInfo) return (
         <SafeAreaView style={styles.safe}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()}>
+                    <Text style={styles.back}>← Volver</Text>
+                </TouchableOpacity>
+            </View>
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ color: Colors.text }}>Entrenador no encontrado</Text>
+                <Text style={{ color: Colors.text }}>Entrenador no encontrado en la base de datos.</Text>
             </View>
         </SafeAreaView>
     );
 
-    const misAlumnos = MOCK_CLIENTES.filter(c => c.id_entrenador === entrenador.id_entrenador);
-    const misRutinas = MOCK_RUTINAS.filter(r => r.id_entrenador === entrenador.id_entrenador);
+    const misAlumnos = dashboard?.listaAlumnos || [];
+    const misRutinas = dashboard?.listaRutinas || [];
+
+    // ... logic above replaces these lines ...
 
     return (
         <SafeAreaView style={styles.safe}>
@@ -37,11 +81,11 @@ export default function EntrenadorDetalle() {
                 {/* Perfil */}
                 <View style={styles.profileCard}>
                     <View style={[styles.avatar, { backgroundColor: '#1565C0' }]}>
-                        <Text style={styles.avatarText}>{entrenador.nombre[0]}</Text>
+                        <Text style={styles.avatarText}>{userInfo?.nombre ? userInfo.nombre[0] : (dashboard?.nombre ? dashboard.nombre[0] : 'E')}</Text>
                     </View>
-                    <Text style={styles.nombre}>{entrenador.nombre} {entrenador.apellido}</Text>
+                    <Text style={styles.nombre}>{userInfo?.nombre || dashboard?.nombre} {userInfo?.apellido || ''}</Text>
                     <View style={[styles.badge, { backgroundColor: Colors.primary }]}>
-                        <Text style={styles.badgeText}>🏋️ {entrenador.especialidad}</Text>
+                        <Text style={styles.badgeText}>🏋️ {dashboard?.especialidad || 'Fitness'}</Text>
                     </View>
                 </View>
 
@@ -49,10 +93,10 @@ export default function EntrenadorDetalle() {
                 <View style={styles.card}>
                     <Text style={styles.cardTitle}>Información Personal</Text>
                     {[
-                        { l: 'Email', v: entrenador.email },
-                        { l: 'Especialidad', v: entrenador.especialidad },
-                        { l: 'Total Alumnos', v: entrenador.totalAlumnos },
-                        { l: 'Rutinas Creadas', v: entrenador.rutinasCreadas },
+                        { l: 'Email', v: userInfo?.email || 'No registrado' },
+                        { l: 'Especialidad', v: dashboard?.especialidad || 'General' },
+                        { l: 'Total Alumnos', v: dashboard?.totalAlumnos || 0 },
+                        { l: 'Rutinas Creadas', v: dashboard?.rutinasCreadas || 0 },
                     ].map((d, i) => (
                         <View key={i} style={styles.row}>
                             <Text style={styles.rowLabel}>{d.l}</Text>
@@ -62,10 +106,10 @@ export default function EntrenadorDetalle() {
                 </View>
 
                 {/* Notas de desempeño */}
-                {entrenador.notas_desempeno && (
+                {userInfo?.notas_desempeno && (
                     <View style={styles.card}>
                         <Text style={styles.cardTitle}>Notas de Desempeño</Text>
-                        <Text style={styles.notasText}>{entrenador.notas_desempeno}</Text>
+                        <Text style={styles.notasText}>{userInfo.notas_desempeno}</Text>
                     </View>
                 )}
 
@@ -75,19 +119,19 @@ export default function EntrenadorDetalle() {
                     {misAlumnos.length === 0 ? (
                         <Text style={styles.empty}>Sin alumnos asignados</Text>
                     ) : (
-                        misAlumnos.map(al => (
+                        misAlumnos.map((al: AlumnoResumen) => (
                             <TouchableOpacity
-                                key={al.id_cliente}
+                                key={al.idCliente}
                                 style={styles.chip}
-                                onPress={() => router.push(`/clientes/${al.id_cliente}`)}
+                                onPress={() => router.push(`/clientes/${al.idCliente}`)}
                             >
                                 <View style={styles.alumnoRow}>
-                                    <View style={[styles.miniAvatar, { backgroundColor: al.estadoMembresia === 'Activa' ? Colors.success : Colors.danger }]}>
-                                        <Text style={styles.miniAvatarText}>{al.nombre[0]}</Text>
+                                    <View style={[styles.miniAvatar, { backgroundColor: al.plan && al.plan !== 'Ninguna' && al.plan !== 'Inactiva' ? Colors.success : Colors.danger }]}>
+                                        <Text style={styles.miniAvatarText}>{al.nombre ? al.nombre[0] : 'C'}</Text>
                                     </View>
                                     <View style={{ flex: 1, marginLeft: 10 }}>
-                                        <Text style={styles.chipTitle}>{al.nombre} {al.apellido}</Text>
-                                        <Text style={styles.chipSub}>{al.nombrePlan} · {al.estadoMembresia}</Text>
+                                        <Text style={styles.chipTitle}>{al.nombre}</Text>
+                                        <Text style={styles.chipSub}>{al.plan || 'Sin plan'} · {al.rutina || 'Sin rutina asignada'}</Text>
                                     </View>
                                     <Text style={{ color: Colors.primary }}>Ver →</Text>
                                 </View>
@@ -102,15 +146,16 @@ export default function EntrenadorDetalle() {
                     {misRutinas.length === 0 ? (
                         <Text style={styles.empty}>Sin rutinas creadas</Text>
                     ) : (
-                        misRutinas.map(r => {
-                            const cliente = MOCK_CLIENTES.find(c => c.id_cliente === r.id_cliente);
+                        misRutinas.map((r: RutinaItem) => {
                             return (
-                                <View key={r.id_rutina} style={styles.chip}>
-                                    <Text style={styles.chipTitle}>🏋️ {r.nombre_rutina}</Text>
+                                <View key={r.id} style={styles.chip}>
+                                    <Text style={styles.chipTitle}>🏋️ {r.nombre}</Text>
                                     <Text style={styles.chipSub}>
-                                        Para: {cliente?.nombre} {cliente?.apellido} · {r.ejercicios.length} ejercicios
+                                        {r.idsEjercicios?.length || 0} ejercicios · {r.activa ? 'Activa' : 'Inactiva'}
                                     </Text>
-                                    <Text style={styles.chipSub}>Creada: {r.fecha_creacion}</Text>
+                                    <TouchableOpacity style={{ marginTop: 8 }} onPress={() => router.push(`/clientes/${r.idCliente}`)}>
+                                        <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: '500' }}>→ Ir al Alumno (ID: {r.idCliente})</Text>
+                                    </TouchableOpacity>
                                 </View>
                             );
                         })

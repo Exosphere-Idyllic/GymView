@@ -28,13 +28,14 @@ export default function TabsLayout() {
         options={{ title: 'Inicio', tabBarIcon: () => <TabIcon icon="🏠" /> }}
       />
 
-      {/* Asistencia QR - recepcionista y admin */}
+
+      {/* Asistencia QR - siempre oculta del tab bar, accesible por ruta directa */}
       <Tabs.Screen
         name="asistencia"
         options={{
-          title: 'Asistencia',
+          title: 'Acceso QR',
           tabBarIcon: () => <TabIcon icon="📷" />,
-          href: (rol === 'admin' || rol === 'recepcionista') ? undefined : null,
+          href: null,
         }}
       />
 
