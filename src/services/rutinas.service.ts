@@ -22,6 +22,19 @@ const rutinasService = {
             '/rutinas/ejercicios',
             { nombre, grupoMuscular }
         );
+    },
+
+    async updateEjercicio(idEjercicio: number, nombre: string, grupoMuscular: string): Promise<{ mensaje: string }> {
+        return apiClient.put<{ mensaje: string }>(
+            `/rutinas/ejercicios/${idEjercicio}`,
+            { nombre, grupoMuscular }
+        );
+    },
+
+    async deleteEjercicio(idEjercicio: number): Promise<{ mensaje: string }> {
+        return apiClient.delete<{ mensaje: string }>(
+            `/rutinas/ejercicios/${idEjercicio}`
+        );
     }
 };
 

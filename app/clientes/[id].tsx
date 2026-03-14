@@ -1,10 +1,12 @@
 // app/clientes/[id].tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '../../src/theme/colors';
 import apiClient from '../../src/services/api.client';
 import { API_CONFIG } from '../../src/config/api.config';
+import authService from '../../src/services/auth.service';
+import { TextInput } from 'react-native';
 
 export default function ClienteDetalle() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -15,6 +17,18 @@ export default function ClienteDetalle() {
   const [asistencias, setAsistencias] = useState<any[]>([]);
   const [pagos, setPagos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ── Estado Modal Editar Cliente ──
+  const [modalVisible, setModalVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formCliente, setFormCliente] = useState({
+    nombre: '',
+    apellido: '',
+    email: '',
+    telefono: '',
+    cedula: '',
+    fechaNacimiento: '',
+  });
 
   const cargarDatosCliente = useCallback(async () => {
     try {
@@ -87,7 +101,19 @@ export default function ClienteDetalle() {
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}><Text style={styles.back}>← Volver</Text></TouchableOpacity>
         <Text style={styles.headerTitle}>Detalle Cliente</Text>
-        <TouchableOpacity onPress={() => Alert.alert('Editar', 'Se conectará al API')}><Text style={{ color: Colors.primary }}>Editar</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => {
+            if (cliente) {
+                setFormCliente({
+                    nombre: cliente.nombre || '',
+                    apellido: cliente.apellido || '',
+                    email: cliente.email || '',
+                    telefono: cliente.telefono || '',
+                    cedula: cliente.cedula || '',
+                    fechaNacimiento: cliente.fecha_nacimiento || ''
+                });
+                setModalVisible(true);
+            }
+        }}><Text style={{ color: Colors.primary }}>Editar</Text></TouchableOpacity>
       </View>
 
       <ScrollView style={{ padding: 14 }} contentContainerStyle={{ paddingBottom: 30 }}>
@@ -161,6 +187,62 @@ export default function ClienteDetalle() {
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>⛔ Inactivar Cliente</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* ─── Modal Editar Cliente ─── */}
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>✏️ Editar Perfil de Cliente</Text>
+
+            {[
+              { label: 'Nombre', key: 'nombre' },
+              { label: 'Apellido', key: 'apellido' },
+              { label: 'Email', key: 'email' },
+              { label: 'Teléfono', key: 'telefono' },
+              { label: 'Cédula', key: 'cedula' },
+              { label: 'Fecha Nacimiento', key: 'fechaNacimiento', placeholder: 'YYYY-MM-DD' },
+            ].map(field => (
+              <View key={field.key} style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>{field.label}</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder={field.placeholder || ''}
+                  placeholderTextColor="#666"
+                  value={(formCliente as any)[field.key]}
+                  onChangeText={(val) => setFormCliente(prev => ({ ...prev, [field.key]: val }))}
+                />
+              </View>
+            ))}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+                <Text style={styles.cancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.saveBtn, saving && { opacity: 0.6 }]} 
+                onPress={async () => {
+                  if (!cliente || !cliente.id_usuario) return;
+                  setSaving(true);
+                  try {
+                    await authService.editarUsuarioAdmin(cliente.id_usuario, formCliente);
+                    Alert.alert('✅ Éxito', 'Los datos del cliente se actualizaron correctamente.');
+                    setModalVisible(false);
+                    cargarDatosCliente(); // Refrescar los datos de la vista
+                  } catch (e: any) {
+                    Alert.alert('Error', e.message || 'No se pudo actualizar el cliente.');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                disabled={saving}
+              >
+                <Text style={styles.saveText}>{saving ? 'Guardando...' : '💾 Guardar'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -186,4 +268,17 @@ const styles = StyleSheet.create({
   chipSub: { color: Colors.textMuted, fontSize: 12, marginTop: 3 },
   empty: { color: Colors.textMuted, textAlign: 'center', paddingVertical: 10 },
   actionBtn: { borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 4 },
+  
+  // Modal Styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalCard: { width: '90%', maxWidth: 400, backgroundColor: Colors.surface, borderRadius: 14, padding: 20 },
+  modalTitle: { color: Colors.text, fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
+  fieldGroup: { marginBottom: 12 },
+  fieldLabel: { color: Colors.textMuted, fontSize: 12, marginBottom: 4 },
+  fieldInput: { backgroundColor: '#1e1e1e', color: Colors.text, fontSize: 14, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 20, gap: 10 },
+  cancelBtn: { padding: 12, paddingHorizontal: 20 },
+  cancelText: { color: Colors.textMuted, fontWeight: 'bold' },
+  saveBtn: { backgroundColor: Colors.primary, padding: 12, paddingHorizontal: 20, borderRadius: 8 },
+  saveText: { color: '#000', fontWeight: 'bold' },
 });

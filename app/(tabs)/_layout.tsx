@@ -39,11 +39,11 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Rutinas - entrenador y cliente */}
+      {/* Ejercicios y Rutinas - entrenador y cliente */}
       <Tabs.Screen
-        name="rutinas"
+        name="ejercicios"
         options={{
-          title: 'Rutinas',
+          title: 'Ejercicios',
           tabBarIcon: () => <TabIcon icon="🏋️" />,
           href: (rol === 'entrenador' || rol === 'cliente') ? undefined : null,
         }}

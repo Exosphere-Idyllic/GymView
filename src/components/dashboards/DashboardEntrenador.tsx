@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView,
-    Alert, Modal, ActivityIndicator, TextInput,
+    Alert, Modal, ActivityIndicator, TextInput, Platform
 } from 'react-native';
 import Colors from '../../theme/colors';
 import { useAuth } from '../../store/AuthContext';
@@ -10,11 +10,12 @@ import { useRouter } from 'expo-router';
 import entrenadoresService, { EntrenadorDashboard, NuevaRutina, RutinaItem } from '../../services/entrenadores.service';
 import rutinasService, { Ejercicio } from '../../services/rutinas.service';
 
-type Tab = 'tablero' | 'alumnos' | 'rutinas';
+type Tab = 'tablero' | 'alumnos' | 'rutinas' | 'agenda';
 
 export default function DashboardEntrenador() {
     const [activeTab, setActiveTab] = useState<Tab>('tablero');
     const [dashboard, setDashboard] = useState<EntrenadorDashboard | null>(null);
+    const [agenda, setAgenda] = useState<import('../../services/entrenadores.service').AlumnoResumen[]>([]);
     const [loading, setLoading] = useState(true);
     const [apiError, setApiError] = useState<string | null>(null);
     const { user, logout } = useAuth();
@@ -42,8 +43,12 @@ export default function DashboardEntrenador() {
         setLoading(true);
         setApiError(null);
         try {
-            const data = await entrenadoresService.getDashboard(user.id_usuario);
+            const [data, agendaData] = await Promise.all([
+                entrenadoresService.getDashboard(user.id_usuario),
+                entrenadoresService.getAgenda(user.id_usuario)
+            ]);
             setDashboard(data);
+            setAgenda(agendaData);
         } catch (e: any) {
             setApiError(e.message);
         } finally {
@@ -65,22 +70,31 @@ export default function DashboardEntrenador() {
         cargarEjercicios();
     }, [cargarDashboard, cargarEjercicios]);
 
-    const tabs: { key: Tab; label: string; icon: string }[] = [
+    const tabs: { key: Tab, label: string, icon: string }[] = [
         { key: 'tablero', label: 'Tablero', icon: '📊' },
         { key: 'alumnos', label: 'Alumnos', icon: '👥' },
         { key: 'rutinas', label: 'Rutinas', icon: '📋' },
+        { key: 'agenda', label: 'Agenda', icon: '📅' },
     ];
 
     // ── Crear rutina ───────────────────────────────────────────
     const abrirCrearRutina = (idCliente?: number) => {
         setEditingRutina(null);
-        setFormRutina({ idCliente: idCliente || 0, nombreRutina: '', idsEjercicios: [] });
+        setFormRutina({ idCliente: idCliente || 0, nombreRutina: '', idsEjercicios: [], ejercicios: [] });
         setModalVisible(true);
     };
 
     const abrirEditarRutina = (r: RutinaItem) => {
         setEditingRutina(r);
-        setFormRutina({ idCliente: r.idCliente, nombreRutina: r.nombre, idsEjercicios: [...r.idsEjercicios] });
+        // Map the existing simple ids into the new detailed array if it exists.
+        // If the backend isn't sending full details yet, we start with defaults for editing.
+        const ejerciciosDetalle = r.idsEjercicios.map(id => ({
+            idEjercicio: id,
+            series: '4',
+            repeticiones: '12',
+            descanso: '60 seg'
+        }));
+        setFormRutina({ idCliente: r.idCliente, nombreRutina: r.nombre, idsEjercicios: [...r.idsEjercicios], ejercicios: ejerciciosDetalle });
         setModalVisible(true);
     };
 
@@ -113,21 +127,25 @@ export default function DashboardEntrenador() {
     };
 
     const eliminarRutina = (r: RutinaItem) => {
-        Alert.alert('Eliminar Rutina', `¿Desactivar "${r.nombre}"?`, [
-            { text: 'Cancelar', style: 'cancel' },
-            {
-                text: 'Desactivar',
-                style: 'destructive',
-                onPress: async () => {
-                    try {
-                        await entrenadoresService.eliminarRutina(r.id);
-                        cargarDashboard();
-                    } catch (e: any) {
-                        Alert.alert('Error', e.message);
-                    }
-                }
+        const execDesactivar = async () => {
+            try {
+                await entrenadoresService.eliminarRutina(r.id);
+                cargarDashboard();
+            } catch (e: any) {
+                Alert.alert('Error', e.message);
             }
-        ]);
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(`¿Desactivar la rutina "${r.nombre}"?`)) {
+                execDesactivar();
+            }
+        } else {
+            Alert.alert('Eliminar Rutina', `¿Desactivar "${r.nombre}"?`, [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Desactivar', style: 'destructive', onPress: execDesactivar }
+            ]);
+        }
     };
 
     const abrirAsignarRutina = (r: RutinaItem) => {
@@ -142,25 +160,69 @@ export default function DashboardEntrenador() {
             Alert.alert('Error', 'Debes seleccionar un alumno para asignar esta rutina');
             return;
         }
-        setAssigningRutina(true);
-        try {
-            await entrenadoresService.asignarRutina(rutinaToAssign.id, clienteParaAsignar);
-            Alert.alert('✅ Éxito', 'Rutina asignada correctamente');
-            setModalAsignarVisible(false);
-            cargarDashboard();
-        } catch (e: any) {
-            Alert.alert('Error', e.message || 'No se pudo asignar la rutina');
-        } finally {
-            setAssigningRutina(false);
+
+        const alumno = dashboard?.listaAlumnos.find(a => a.idCliente === clienteParaAsignar);
+        
+        const execAsignar = async () => {
+            setAssigningRutina(true);
+            try {
+                await entrenadoresService.asignarRutina(rutinaToAssign.id, clienteParaAsignar);
+                Alert.alert('✅ Éxito', 'Rutina asignada correctamente');
+                setModalAsignarVisible(false);
+                cargarDashboard();
+            } catch (e: any) {
+                Alert.alert('Error', e.message || 'No se pudo asignar la rutina');
+            } finally {
+                setAssigningRutina(false);
+            }
+        };
+        
+        if (alumno && alumno.rutina === rutinaToAssign.nombre) {
+            if (Platform.OS === 'web') {
+                if (window.confirm(`El alumno ya tiene la rutina "${rutinaToAssign.nombre}" activa. ¿Deseas volver a asignarla?`)) {
+                    execAsignar();
+                }
+            } else {
+                Alert.alert(
+                    'Rutina ya asignada',
+                    `Este alumno ya tiene la rutina "${rutinaToAssign.nombre}" activa. ¿Deseas volver a asignarla?`,
+                    [
+                        { text: 'Cancelar', style: 'cancel' },
+                        { text: 'Asignar de nuevo', onPress: execAsignar }
+                    ]
+                );
+            }
+            return;
         }
+
+        execAsignar();
     };
 
     const toggleEjercicio = (id: number) => {
+        setFormRutina(prev => {
+            const isSelected = prev.idsEjercicios.includes(id);
+            const newIds = isSelected 
+                ? prev.idsEjercicios.filter(e => e !== id) 
+                : [...prev.idsEjercicios, id];
+            
+            const newEjercicios = isSelected
+                ? (prev.ejercicios || []).filter(e => e.idEjercicio !== id)
+                : [...(prev.ejercicios || []), { idEjercicio: id, series: '4', repeticiones: '12', descanso: '60 seg' }];
+
+            return {
+                ...prev,
+                idsEjercicios: newIds,
+                ejercicios: newEjercicios
+            };
+        });
+    };
+
+    const updateEjercicioDetalle = (id: number, field: 'series' | 'repeticiones' | 'descanso', value: string) => {
         setFormRutina(prev => ({
             ...prev,
-            idsEjercicios: prev.idsEjercicios.includes(id)
-                ? prev.idsEjercicios.filter(e => e !== id)
-                : [...prev.idsEjercicios, id],
+            ejercicios: (prev.ejercicios || []).map(e => 
+                e.idEjercicio === id ? { ...e, [field]: value } : e
+            )
         }));
     };
 
@@ -215,7 +277,7 @@ export default function DashboardEntrenador() {
                 <View>
                     <Text style={styles.headerTitle}>⚡ IRON COACH</Text>
                     <Text style={styles.headerSub}>
-                        {dashboard.nombre} {user?.nombre_completo} {dashboard.especialidad}
+                        {dashboard.nombre} - {dashboard.especialidad}
                         {apiError ? '  ⚠️' : '  🟢'}
                     </Text>
                 </View>
@@ -373,6 +435,40 @@ export default function DashboardEntrenador() {
                         )}
                     </>
                 )}
+
+                {/* AGENDA DEL DÍA */}
+                {activeTab === 'agenda' && (
+                    <>
+                        <Text style={styles.sectionTitle}>Agenda de Hoy ({agenda.length})</Text>
+                        <Text style={{ color: Colors.textMuted, marginBottom: 16 }}>
+                            Alumnos que tienen programada una rutina activa el día de hoy.
+                        </Text>
+                        
+                        {agenda.length === 0 ? (
+                            <View style={[styles.card, { alignItems: 'center', padding: 30 }]}>
+                                <Text style={{ fontSize: 48 }}>📅</Text>
+                                <Text style={styles.empty}>No hay sesiones programadas para hoy.</Text>
+                            </View>
+                        ) : (
+                            agenda.map((al, i) => (
+                                <View key={i} style={styles.card}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <View style={[styles.avatar, { backgroundColor: '#1565C0' }]}>
+                                            <Text style={styles.avatarText}>{al.nombre.charAt(0)}</Text>
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <Text style={styles.alumnoName}>{al.nombre}</Text>
+                                            <Text style={styles.alumnoSub}>{al.plan} · {al.rutina}</Text>
+                                        </View>
+                                        <View style={[styles.badge, { backgroundColor: al.terminoHoy ? Colors.success : '#555' }]}>
+                                            <Text style={styles.badgeText}>{al.terminoHoy ? '✅ Terminó' : '⏳ Pendiente'}</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            ))
+                        )}
+                    </>
+                )}
               </View>{/* end pageInner */}
             </ScrollView>
 
@@ -443,6 +539,56 @@ export default function DashboardEntrenador() {
                                     })}
                                 </View>
                             </View>
+
+                            {/* DETALLE EJERCICIOS SELECCIONADOS (RF05) */}
+                            {formRutina.ejercicios && formRutina.ejercicios.length > 0 && (
+                                <View style={styles.fieldGroup}>
+                                    <Text style={styles.fieldLabel}>Detalle de Ejercicios</Text>
+                                    <View style={{ gap: 10 }}>
+                                        {formRutina.ejercicios.map(detalle => {
+                                            const ej = ejercicios.find(x => x.idEjercicio === detalle.idEjercicio);
+                                            if (!ej) return null;
+                                            return (
+                                                <View key={detalle.idEjercicio} style={{ backgroundColor: '#1E1E1E', padding: 12, borderRadius: 8 }}>
+                                                    <Text style={{ color: '#fff', fontWeight: 'bold', marginBottom: 8 }}>{ej.nombre}</Text>
+                                                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={{ color: '#999', fontSize: 11, marginBottom: 4 }}>Series</Text>
+                                                            <TextInput
+                                                                style={[styles.fieldInput, { padding: 8, fontSize: 13, height: 40 }]}
+                                                                value={detalle.series}
+                                                                onChangeText={txt => updateEjercicioDetalle(detalle.idEjercicio, 'series', txt)}
+                                                                placeholder="4"
+                                                                placeholderTextColor="#666"
+                                                            />
+                                                        </View>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={{ color: '#999', fontSize: 11, marginBottom: 4 }}>Reps</Text>
+                                                            <TextInput
+                                                                style={[styles.fieldInput, { padding: 8, fontSize: 13, height: 40 }]}
+                                                                value={detalle.repeticiones}
+                                                                onChangeText={txt => updateEjercicioDetalle(detalle.idEjercicio, 'repeticiones', txt)}
+                                                                placeholder="12"
+                                                                placeholderTextColor="#666"
+                                                            />
+                                                        </View>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={{ color: '#999', fontSize: 11, marginBottom: 4 }}>Descanso</Text>
+                                                            <TextInput
+                                                                style={[styles.fieldInput, { padding: 8, fontSize: 13, height: 40 }]}
+                                                                value={detalle.descanso}
+                                                                onChangeText={txt => updateEjercicioDetalle(detalle.idEjercicio, 'descanso', txt)}
+                                                                placeholder="60s"
+                                                                placeholderTextColor="#666"
+                                                            />
+                                                        </View>
+                                                    </View>
+                                                </View>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+                            )}
 
                             <View style={styles.modalActions}>
                                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>

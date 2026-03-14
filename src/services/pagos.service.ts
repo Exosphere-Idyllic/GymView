@@ -13,6 +13,7 @@ export interface Pago {
     monto: number;
     metodoPago?: string;
     observaciones?: string;
+    idFactura?: number;
 }
 
 const pagosService = {
@@ -24,6 +25,15 @@ const pagosService = {
         const data = await apiClient.get<Pago[] | any>(API_CONFIG.ENDPOINTS.PAGOS.BASE);
         return Array.isArray(data) ? data : [];
     },
+
+    /**
+     * Obtener el comprobante (factura) de un pago.
+     * GET /api/ventas/{idFactura}/comprobante
+     */
+    async getComprobante(idFactura: number): Promise<any> {
+        // Aprovechamos el apiClient pero vamos a la ruta de ventas
+        return await apiClient.get<any>(`/ventas/${idFactura}/comprobante`);
+    }
 };
 
 export default pagosService;

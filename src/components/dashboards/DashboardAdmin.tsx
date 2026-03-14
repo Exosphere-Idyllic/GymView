@@ -8,10 +8,11 @@ import authService, { AdminDashboardResponse, AdminUsuario } from '../../service
 import pagosService, { Pago } from '../../services/pagos.service';
 import membresiaService, { PLANES_MEMBRESIA } from '../../services/membresia.service';
 import reportesService, { ReporteAsistencia, ReporteIngresos, ReporteRutinas } from '../../services/reportes.service';
+import productosService, { Producto } from '../../services/productos.service';
 import apiClient from '../../services/api.client';
 import { API_CONFIG } from '../../config/api.config';
 
-type Tab = 'resumen' | 'clientes' | 'entrenadores' | 'pagos' | 'logs' | 'usuarios' | 'entrenamientos' | 'reportes';
+type Tab = 'resumen' | 'clientes' | 'entrenadores' | 'pagos' | 'logs' | 'usuarios' | 'entrenamientos' | 'reportes' | 'tienda';
 
 export default function DashboardAdmin() {
     const [activeTab, setActiveTab] = useState<Tab>('resumen');
@@ -44,6 +45,11 @@ export default function DashboardAdmin() {
     const [clienteMembresia, setClienteMembresia] = useState<AdminUsuario | null>(null);
     const [savingMembresia, setSavingMembresia] = useState(false);
 
+    // ── Estado Comprobante ──────────────────────────────────────
+    const [modalComprobante, setModalComprobante] = useState(false);
+    const [comprobanteData, setComprobanteData] = useState<any | null>(null);
+    const [loadingComprobante, setLoadingComprobante] = useState(false);
+
     // ── Estado Tab Entrenamientos ──────────────────────────────
     const [selectedEntrenadorTab, setSelectedEntrenadorTab] = useState<AdminUsuario | null>(null);
     const [draftAssignments, setDraftAssignments] = useState<Record<number, boolean>>({});
@@ -54,6 +60,7 @@ export default function DashboardAdmin() {
         { key: 'usuarios', label: 'Usuarios', icon: '🛡️' },
         { key: 'clientes', label: 'Clientes', icon: '👥' },
         { key: 'entrenamientos', label: 'Entrenamientos', icon: '💪' },
+        { key: 'tienda', label: 'Inventario', icon: '📦' },
         { key: 'pagos', label: 'Pagos', icon: '💰' },
         { key: 'logs', label: 'Accesos', icon: '🔐' },
         { key: 'reportes', label: 'Reportes', icon: '📈' },
@@ -65,6 +72,16 @@ export default function DashboardAdmin() {
     const [reportesRutinasList, setReportesRutinasList] = useState<ReporteRutinas[]>([]);
     const [loadingReportes, setLoadingReportes] = useState(false);
     const [apiError, setApiError] = useState<string | null>(null);
+
+    // ── Estado Tienda/Productos ────────────────────────────────
+    const [productos, setProductos] = useState<Producto[]>([]);
+    const [loadingProductos, setLoadingProductos] = useState(false);
+    const [modalProducto, setModalProducto] = useState(false);
+    const [editingProduct, setEditingProduct] = useState<Producto | null>(null);
+    const [savingProducto, setSavingProducto] = useState(false);
+    const [formProducto, setFormProducto] = useState({
+        nombre: '', descripcion: '', precio: '0', tipo: 'Tienda', imagenUrl: ''
+    });
 
     // ── Cargar stats ───────────────────────────────────────────
     const cargarStats = useCallback(async () => {
@@ -121,12 +138,27 @@ export default function DashboardAdmin() {
             const data = await pagosService.getAll();
             setPagos(data);
         } catch (e: any) {
-            // Si el endpoint aún no existe en el backend, mostramos lista vacía
-            setPagos([]);
+            Alert.alert('Error', 'No se pudieron cargar los pagos');
         } finally {
             setLoadingPagos(false);
         }
     }, []);
+
+    // ── Ver Comprobante ───────────────────────────────────────
+    const verComprobante = async (idFactura: number) => {
+        setComprobanteData(null);
+        setLoadingComprobante(true);
+        setModalComprobante(true);
+        try {
+            const data = await pagosService.getComprobante(idFactura);
+            setComprobanteData(data);
+        } catch (e: any) {
+            Alert.alert('Error', 'No se pudo cargar el comprobante');
+            setModalComprobante(false);
+        } finally {
+            setLoadingComprobante(false);
+        }
+    };
 
     const cargarLogs = useCallback(async () => {
         setLoadingLogs(true);
@@ -159,6 +191,18 @@ export default function DashboardAdmin() {
         }
     }, []);
 
+    const cargarProductos = useCallback(async () => {
+        setLoadingProductos(true);
+        try {
+            const data = await productosService.listar();
+            setProductos(data);
+        } catch (e: any) {
+            Alert.alert('Error', 'No se pudo cargar el inventario.');
+        } finally {
+            setLoadingProductos(false);
+        }
+    }, []);
+
     useEffect(() => {
         cargarStats();
         cargarLogs();
@@ -171,6 +215,7 @@ export default function DashboardAdmin() {
             cargarEntrenadores();
             cargarClientes();
         }
+        if (activeTab === 'tienda') cargarProductos();
         if (activeTab === 'pagos') cargarPagos();
         if (activeTab === 'logs') cargarLogs();
         if (activeTab === 'reportes') cargarReportes();
@@ -718,6 +763,94 @@ export default function DashboardAdmin() {
                     </View>
                 )}
 
+                {/* ─── INVENTARIO / TIENDA ─── */}
+                {activeTab === 'tienda' && (
+                    <>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>Inventario de Tienda</Text>
+                            <TouchableOpacity style={styles.addBtn} onPress={() => {
+                                setEditingProduct(null);
+                                setFormProducto({ nombre: '', descripcion: '', precio: '0', tipo: 'Tienda', imagenUrl: '' });
+                                setModalProducto(true);
+                            }}>
+                                <Text style={styles.addBtnText}>+ Nuevo Producto</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {loadingProductos ? (
+                            <View style={styles.loadingRow}>
+                                <ActivityIndicator color={Colors.primary} />
+                                <Text style={styles.loadingText}>Cargando inventario...</Text>
+                            </View>
+                        ) : productos.length === 0 ? (
+                            <View style={styles.emptyBox}>
+                                <Text style={styles.emptyText}>No hay productos registrados</Text>
+                                <TouchableOpacity onPress={cargarProductos}><Text style={{ color: Colors.primary, marginTop: 8 }}>🔄 Recargar</Text></TouchableOpacity>
+                            </View>
+                        ) : (
+                            productos.map(p => (
+                                <View key={p.idProducto || p.id} style={styles.card}>
+                                    <View style={styles.cardRow}>
+                                        <View style={[styles.avatar, { backgroundColor: '#333', overflow: 'hidden' }]}>
+                                            {p.imagenUrl ? (
+                                                <img src={p.imagenUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="prod" />
+                                            ) : (
+                                                <Text style={styles.avatarText}>📦</Text>
+                                            )}
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <Text style={styles.cardName}>{p.nombre}</Text>
+                                            <Text style={styles.cardSub} numberOfLines={2}>{p.descripcion || 'Sin descripción'}</Text>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text style={[styles.cardName, { color: Colors.success }]}>${Number(p.precio).toFixed(2)}</Text>
+                                            <View style={[styles.badge, { backgroundColor: '#444', marginTop: 4 }]}>
+                                                <Text style={[styles.badgeText, { fontSize: 10 }]}>{p.tipo}</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                    <View style={[styles.cardFooter, { justifyContent: 'flex-end', gap: 15 }]}>
+                                        <TouchableOpacity onPress={() => {
+                                            setEditingProduct(p);
+                                            setFormProducto({
+                                                nombre: p.nombre,
+                                                descripcion: p.descripcion,
+                                                precio: p.precio.toString(),
+                                                tipo: p.tipo,
+                                                imagenUrl: p.imagenUrl || ''
+                                            });
+                                            setModalProducto(true);
+                                        }}>
+                                            <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: '600' }}>✏️ Editar</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => {
+                                            const execDelete = async () => {
+                                                try {
+                                                    await productosService.delete(p.idProducto || p.id!);
+                                                    Alert.alert('✅ Éxito', 'Producto eliminado');
+                                                    cargarProductos();
+                                                } catch(e:any) {
+                                                    Alert.alert('Error', e.message || 'No se pudo eliminar');
+                                                }
+                                            };
+                                            if (Platform.OS === 'web') {
+                                                if (window.confirm(`¿Eliminar ${p.nombre}?`)) execDelete();
+                                            } else {
+                                                Alert.alert('Eliminar', `¿Eliminar ${p.nombre}?`, [
+                                                    {text: 'Cancelar', style: 'cancel'},
+                                                    {text: 'Eliminar', style: 'destructive', onPress: execDelete}
+                                                ]);
+                                            }
+                                        }}>
+                                            <Text style={{ color: Colors.danger, fontSize: 13, fontWeight: '600' }}>🗑️ Eliminar</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))
+                        )}
+                    </>
+                )}
+
                 {/* ─── PAGOS ─── */}
                 {activeTab === 'pagos' && (
                     <>
@@ -747,7 +880,14 @@ export default function DashboardAdmin() {
                                                 <Text style={styles.cardName}>{p.nombreCliente} {p.apellidoCliente}</Text>
                                                 <Text style={styles.cardSub}>{p.metodoPago ?? 'Pago'} · {p.fechaPago?.substring(0, 10)}</Text>
                                             </View>
-                                            <Text style={[styles.statValue, { color: Colors.success, fontSize: 20 }]}>${p.monto}</Text>
+                                            <View style={{ alignItems: 'flex-end' }}>
+                                                <Text style={[styles.statValue, { color: Colors.success, fontSize: 20 }]}>${p.monto}</Text>
+                                                {p.idFactura && (
+                                                    <TouchableOpacity style={{ marginTop: 4, padding: 4, backgroundColor: '#333', borderRadius: 4 }} onPress={() => verComprobante(p.idFactura!)}>
+                                                        <Text style={{ color: '#fff', fontSize: 12 }}>📄 Comprobante</Text>
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
                                         </View>
                                         {p.observaciones ? <Text style={styles.logDetail}>📝 {p.observaciones}</Text> : null}
                                     </View>
@@ -1007,6 +1147,138 @@ export default function DashboardAdmin() {
                     </View>
                 </View>
             </Modal>
+
+            {/* ─── Modal VISTA DE COMPROBANTE ─── */}
+            <Modal visible={modalComprobante} animationType="fade" transparent onRequestClose={() => setModalComprobante(false)}>
+                <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.8)' }]}>
+                    <View style={[styles.modalCard, { maxWidth: 400, padding: 20 }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                            <Text style={styles.modalTitle}>🧾 Comprobante de Pago</Text>
+                            <TouchableOpacity onPress={() => setModalComprobante(false)}>
+                                <Text style={{ color: Colors.danger, fontSize: 24, fontWeight: 'bold' }}>×</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {loadingComprobante ? (
+                            <ActivityIndicator size="large" color={Colors.primary} style={{ marginVertical: 30 }} />
+                        ) : comprobanteData ? (
+                            <ScrollView style={{ backgroundColor: '#1e1e1e', borderRadius: 8, padding: 15 }}>
+                                <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 5 }}>IRON ADMIN GYM</Text>
+                                <Text style={{ color: '#aaa', fontSize: 12, textAlign: 'center', marginBottom: 20 }}>Factura Electrónica</Text>
+
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+                                    <Text style={{ color: '#aaa' }}>Factura Nº:</Text>
+                                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>{comprobanteData.numeroFactura}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#333', paddingBottom: 15 }}>
+                                    <Text style={{ color: '#aaa' }}>Fecha:</Text>
+                                    <Text style={{ color: '#fff' }}>{new Date(comprobanteData.fechaEmision).toLocaleString('es')}</Text>
+                                </View>
+
+                                <Text style={{ color: '#fff', fontWeight: 'bold', marginBottom: 10 }}>DETALLE:</Text>
+                                
+                                {comprobanteData.detalle && comprobanteData.detalle.map((item: any, idx: number) => (
+                                    <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <View style={{ flex: 2 }}>
+                                            <Text style={{ color: '#fff' }}>{item.cantidad}x {item.descripcion}</Text>
+                                            <Text style={{ color: '#888', fontSize: 11 }}>PU: ${item.precioUnitario?.toFixed(2)}</Text>
+                                        </View>
+                                        <View style={{ flex: 1, alignItems: 'flex-end', justifyContent: 'center' }}>
+                                            <Text style={{ color: '#fff' }}>${item.subtotal?.toFixed(2)}</Text>
+                                        </View>
+                                    </View>
+                                ))}
+
+                                <View style={{ borderTopWidth: 1, borderTopColor: '#333', marginTop: 15, paddingTop: 15 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+                                        <Text style={{ color: '#aaa' }}>Subtotal:</Text>
+                                        <Text style={{ color: '#fff' }}>${comprobanteData.subtotal?.toFixed(2)}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+                                        <Text style={{ color: '#aaa' }}>IVA:</Text>
+                                        <Text style={{ color: '#fff' }}>${comprobanteData.iva?.toFixed(2)}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#444' }}>
+                                        <Text style={{ color: Colors.primary, fontWeight: 'bold', fontSize: 18 }}>TOTAL PAGADO:</Text>
+                                        <Text style={{ color: Colors.success, fontWeight: 'bold', fontSize: 18 }}>${comprobanteData.totalPagado?.toFixed(2)}</Text>
+                                    </View>
+                                </View>
+                                <Text style={{ color: '#666', fontSize: 10, textAlign: 'center', marginTop: 30, marginBottom: 10 }}>
+                                    Gracias por su compra
+                                </Text>
+                            </ScrollView>
+                        ) : (
+                            <Text style={{ color: '#fff', textAlign: 'center' }}>No se encontraron detalles.</Text>
+                        )}
+                    </View>
+                </View>
+            </Modal>
+            {/* ─── Modal Producto (CRUD Tienda) ─── */}
+            <Modal visible={modalProducto} animationType="slide" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <Text style={styles.modalTitle}>{editingProduct ? '✏️ Editar Producto' : '📦 Nuevo Producto'}</Text>
+                        <ScrollView style={{ maxHeight: '80%' }}>
+                            <Text style={styles.feLabel}>Nombre</Text>
+                            <TextInput style={styles.feInput} value={formProducto.nombre} onChangeText={t => setFormProducto(prev => ({ ...prev, nombre: t }))} />
+                            
+                            <Text style={styles.feLabel}>Descripción</Text>
+                            <TextInput style={[styles.feInput, { height: 60, textAlignVertical: 'top' }]} multiline value={formProducto.descripcion} onChangeText={t => setFormProducto(prev => ({ ...prev, descripcion: t }))} />
+                            
+                            <Text style={styles.feLabel}>Precio ($)</Text>
+                            <TextInput style={styles.feInput} keyboardType="numeric" value={formProducto.precio} onChangeText={t => setFormProducto(prev => ({ ...prev, precio: t }))} />
+                            
+                            <Text style={styles.feLabel}>Tipo (Ej: Tienda, Suplemento, Ropa)</Text>
+                            <TextInput style={styles.feInput} value={formProducto.tipo} onChangeText={t => setFormProducto(prev => ({ ...prev, tipo: t }))} />
+                            
+                            <Text style={styles.feLabel}>URL Imagen (Opcional)</Text>
+                            <TextInput style={styles.feInput} placeholder="https://ejemplo.com/foto.jpg" placeholderTextColor="#666" value={formProducto.imagenUrl} onChangeText={t => setFormProducto(prev => ({ ...prev, imagenUrl: t }))} />
+                        </ScrollView>
+
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalProducto(false)}>
+                                <Text style={styles.cancelText}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.saveBtn, savingProducto && { opacity: 0.6 }]} 
+                                disabled={savingProducto}
+                                onPress={async () => {
+                                    if (!formProducto.nombre || !formProducto.precio || !formProducto.tipo) {
+                                        Alert.alert('Error', 'Nombre, precio y tipo son obligatorios');
+                                        return;
+                                    }
+                                    setSavingProducto(true);
+                                    try {
+                                        const payload = {
+                                            nombre: formProducto.nombre,
+                                            descripcion: formProducto.descripcion,
+                                            precio: parseFloat(formProducto.precio) || 0,
+                                            tipo: formProducto.tipo,
+                                            imagenUrl: formProducto.imagenUrl
+                                        };
+                                        if (editingProduct) {
+                                            await productosService.update(editingProduct.idProducto || editingProduct.id!, payload);
+                                            Alert.alert('✅ Éxito', 'Producto actualizado');
+                                        } else {
+                                            await productosService.create(payload);
+                                            Alert.alert('✅ Éxito', 'Producto creado');
+                                        }
+                                        setModalProducto(false);
+                                        cargarProductos();
+                                    } catch (e: any) {
+                                        Alert.alert('Error', e.message || 'Error al guardar el producto');
+                                    } finally {
+                                        setSavingProducto(false);
+                                    }
+                                }}
+                            >
+                                <Text style={styles.saveText}>{savingProducto ? 'Guardando...' : '💾 Guardar'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
         </SafeAreaView>
     );
 }
@@ -1074,5 +1346,10 @@ const styles = StyleSheet.create({
     cancelBtn: { flex: 1, borderWidth: 1, borderColor: '#555', borderRadius: 10, padding: 14, alignItems: 'center' },
     cancelText: { color: Colors.textMuted, fontWeight: '600' },
     saveBtn: { flex: 1, backgroundColor: Colors.primary, borderRadius: 10, padding: 14, alignItems: 'center' },
+    saveText: { color: '#000', fontWeight: 'bold' },
+    
+    // Tienda Styles
+    feLabel: { color: Colors.textMuted, fontSize: 13, marginBottom: 5 },
+    feInput: { backgroundColor: '#1e1e1e', color: Colors.text, padding: 12, borderRadius: 8, marginBottom: 15, borderWidth: 1, borderColor: Colors.border },
     saveBtnText: { color: Colors.black, fontWeight: '700', fontSize: 15 },
 });

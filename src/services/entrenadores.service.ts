@@ -38,10 +38,18 @@ export interface EntrenadorDashboard {
  *   public String nombreRutina;
  *   public List<Integer> idsEjercicios;
  */
+export interface EjercicioEnRutina {
+    idEjercicio: number;
+    series?: string;
+    repeticiones?: string;
+    descanso?: string;
+}
+
 export interface NuevaRutina {
     idCliente: number;
     nombreRutina: string;
     idsEjercicios: number[];
+    ejercicios?: EjercicioEnRutina[];
 }
 
 // Alias para compatibilidad con código existente que lo importa como NuevaRutinaDTO

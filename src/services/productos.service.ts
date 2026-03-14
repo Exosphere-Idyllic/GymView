@@ -10,8 +10,9 @@ export interface Producto {
     nombre: string;
     descripcion: string;
     precio: number;
-    tipo: 'venta' | 'uso';
+    tipo: string;
     stock_actual?: number;
+    imagenUrl?: string;
 }
 
 const productosService = {
@@ -31,6 +32,30 @@ const productosService = {
     getImagenUrl(id: number): string {
         return `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PRODUCTOS.IMAGEN(id)}`;
     },
+
+    /**
+     * Crear un nuevo producto
+     * POST /productos/
+     */
+    async create(producto: Partial<Producto>): Promise<any> {
+        return await apiClient.post(API_CONFIG.ENDPOINTS.PRODUCTOS.BASE, producto);
+    },
+
+    /**
+     * Actualizar un producto existente
+     * PUT /productos/{id}
+     */
+    async update(idProducto: number, producto: Partial<Producto>): Promise<any> {
+        return await apiClient.put(`${API_CONFIG.ENDPOINTS.PRODUCTOS.BASE}/${idProducto}`, producto);
+    },
+
+    /**
+     * Eliminar un producto
+     * DELETE /productos/{id}
+     */
+    async delete(idProducto: number): Promise<any> {
+        return await apiClient.delete(`${API_CONFIG.ENDPOINTS.PRODUCTOS.BASE}/${idProducto}`);
+    }
 };
 
 export default productosService;
