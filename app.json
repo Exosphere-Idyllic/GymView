@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "GymView",
-    "slug": "gymview",
+    "name": "Iron Fitness",
+    "slug": "ironfitness",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "gymview",
+    "scheme": "ironfitness",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gymview.app"
+      "bundleIdentifier": "com.ironfitness.app"
     },
     "android": {
-      "package": "com.gymview.app"
+      "package": "com.ironfitness.app"
     },
     "plugins": [
       "expo-router"

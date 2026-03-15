@@ -345,8 +345,8 @@ const styles = StyleSheet.create({
     alertSuccess:   { backgroundColor: '#1a3d2b', borderWidth: 1, borderColor: Colors.success, borderRadius: 8, padding: 12, marginBottom: 14 },
     alertText:      { color: Colors.text, fontSize: 13, textAlign: 'center' },
 
-    card:           { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 16, padding: 24 },
-    cardDesktop:    { width: 500, alignSelf: 'center' },
+    card:           { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 16, padding: 24, width: '100%', maxWidth: 420, alignSelf: 'center' },
+    cardDesktop:    {  },
     cardSubtitle:   { color: Colors.textMuted, textAlign: 'center', marginBottom: 20, fontSize: 14 },
 
     row2:           { },
