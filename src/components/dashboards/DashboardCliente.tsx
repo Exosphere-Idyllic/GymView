@@ -6,8 +6,10 @@ import { useAuth } from '../../store/AuthContext';
 import { useRouter } from 'expo-router';
 import clientesService, { ClienteDashboard } from '../../services/clientes.service';
 import membresiaService, { PLANES_MEMBRESIA } from '../../services/membresia.service';
+import pagosService, { Pago } from '../../services/pagos.service';
+import PagoMembresia, { PlanSeleccionado } from '../PagoMembresia';
 
-type Tab = 'inicio' | 'rutina' | 'membresia';
+type Tab = 'inicio' | 'rutina' | 'membresia' | 'finanzas';
 
 export default function DashboardCliente() {
     const [activeTab, setActiveTab] = useState<Tab>('inicio');
@@ -22,6 +24,14 @@ export default function DashboardCliente() {
     // ── Estado Modal Membresía ──────────────────────────────────
     const [modalMembresia, setModalMembresia] = useState(false);
     const [savingMembresia, setSavingMembresia] = useState(false);
+
+    // ── Estado Vista Pago ──────────────────────────────────────
+    const [planParaPago, setPlanParaPago] = useState<PlanSeleccionado | null>(null);
+    const [mostrarPago, setMostrarPago] = useState(false);
+
+    // ── Estado Finanzas ──────────────────────────────────────
+    const [pagos, setPagos] = useState<Pago[]>([]);
+    const [loadingPagos, setLoadingPagos] = useState(false);
 
     const cargarDashboard = useCallback(async () => {
         if (!user?.id_usuario) return;
@@ -62,25 +72,37 @@ export default function DashboardCliente() {
         );
     };
 
-    const renovarMembresia = async (idPlan: number) => {
-        if (!user?.id_usuario) return;
-        setSavingMembresia(true);
-        try {
-            await membresiaService.asignar(user.id_usuario, idPlan);
-            Alert.alert('✅ Éxito', '¡Tu membresía ha sido renovada exitosamente!');
-            setModalMembresia(false);
-            cargarDashboard();
-        } catch (e: any) {
-            Alert.alert('Error', e.message);
-        } finally {
-            setSavingMembresia(false);
-        }
+    const abrirPago = (plan: { id: number; nombre: string; precio: number; dias: number }) => {
+        setPlanParaPago(plan);
+        setModalMembresia(false);
+        setMostrarPago(true);
     };
+
+    const handlePagoRecepcion = async (planId: number) => {
+        if (!user?.id_usuario) return;
+        await membresiaService.asignar(user.id_usuario, planId);
+        Alert.alert('✅ Éxito', '¡Tu membresía ha sido activada! Acércate a recepción para completar el pago.');
+        cargarDashboard();
+    };
+
+    const cargarPagos = useCallback(async () => {
+        if (!user?.id_usuario) return;
+        setLoadingPagos(true);
+        try {
+            const data = await pagosService.getByCliente(user.id_usuario);
+            setPagos(data);
+        } catch (e: any) {
+            setPagos([]);
+        } finally {
+            setLoadingPagos(false);
+        }
+    }, [user?.id_usuario]);
 
     const tabs: { key: Tab; label: string; icon: string }[] = [
         { key: 'inicio', label: 'Inicio', icon: '🏠' },
         { key: 'rutina', label: 'Entrenamiento', icon: '🏋️' },
         { key: 'membresia', label: 'Membresía', icon: '💳' },
+        { key: 'finanzas', label: 'Finanzas', icon: '📊' },
     ];
 
     if (loading) {
@@ -308,15 +330,63 @@ export default function DashboardCliente() {
                                 style={styles.renovarBtn}
                                 onPress={() => setModalMembresia(true)}
                             >
-                                <Text style={styles.renovarText}>💳 Renovar Plan</Text>
+                                <Text style={styles.renovarText}>💳 {membresiaActiva ? 'Cambiar / Renovar Plan' : 'Activar Plan'}</Text>
                             </TouchableOpacity>
                         </View>
+                    </View>
+                )}
+
+                {/* ─── FINANZAS ─── */}
+                {activeTab === 'finanzas' && (
+                    <View>
+                        <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: Colors.primary }]}>
+                            <Text style={styles.sectionTitle}>📊 Historial Financiero</Text>
+                            <Text style={{ color: Colors.textMuted, fontSize: 13, marginBottom: 12 }}>
+                                Todos tus movimientos y pagos realizados.
+                            </Text>
+                            <TouchableOpacity style={styles.renovarBtn} onPress={cargarPagos}>
+                                <Text style={styles.renovarText}>{loadingPagos ? 'Cargando...' : '🔄 Actualizar'}</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {loadingPagos ? (
+                            <View style={[styles.card, { alignItems: 'center', padding: 30 }]}>
+                                <ActivityIndicator color={Colors.primary} size="large" />
+                            </View>
+                        ) : pagos.length === 0 ? (
+                            <View style={[styles.card, { alignItems: 'center', padding: 30 }]}>
+                                <Text style={{ fontSize: 48, marginBottom: 10 }}>💸</Text>
+                                <Text style={styles.empty}>No se encontraron movimientos</Text>
+                                <Text style={{ color: Colors.textMuted, fontSize: 12, marginTop: 6, textAlign: 'center' }}>
+                                    Tus pagos aparecerán aquí una vez que actives una membresía.
+                                </Text>
+                            </View>
+                        ) : (
+                            pagos.map((p, i) => (
+                                <View key={i} style={styles.finanzaCard}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <Text style={{ color: Colors.text, fontWeight: '700', fontSize: 15 }}>
+                                            ${p.monto?.toFixed(2) || '0.00'}
+                                        </Text>
+                                        <View style={[styles.badge, { backgroundColor: Colors.success }]}>
+                                            <Text style={styles.badgeText}>{p.metodoPago || 'EFECTIVO'}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <Text style={{ color: Colors.textMuted, fontSize: 12 }}>📅 {p.fechaPago}</Text>
+                                        {p.observaciones && (
+                                            <Text style={{ color: Colors.textMuted, fontSize: 12, flex: 1, textAlign: 'right' }}>💬 {p.observaciones}</Text>
+                                        )}
+                                    </View>
+                                </View>
+                            ))
+                        )}
                     </View>
                 )}
               </View>{/* end pageInner */}
             </ScrollView>
 
-            {/* ─── Modal Renovar Membresía ─── */}
+            {/* ─── Modal Selección de Plan ─── */}
             <Modal visible={modalMembresia} animationType="slide" transparent onRequestClose={() => setModalMembresia(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalCard}>
@@ -326,8 +396,7 @@ export default function DashboardCliente() {
                             <TouchableOpacity
                                 key={plan.id}
                                 style={{ backgroundColor: '#212529', padding: 14, borderRadius: 10, marginBottom: 10, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
-                                onPress={() => renovarMembresia(plan.id)}
-                                disabled={savingMembresia}
+                                onPress={() => abrirPago(plan)}
                             >
                                 <View>
                                     <Text style={{ color: Colors.text, fontSize: 16, fontWeight: '600' }}>{plan.nombre}</Text>
@@ -345,6 +414,17 @@ export default function DashboardCliente() {
                     </View>
                 </View>
             </Modal>
+
+            {/* ─── Vista de Pago ─── */}
+            <PagoMembresia
+                visible={mostrarPago}
+                plan={planParaPago}
+                planActual={d?.nombrePlan || null}
+                precioActual={d?.precioPlan || 0}
+                membresiaActiva={membresiaActiva}
+                onClose={() => setMostrarPago(false)}
+                onPagoRecepcion={handlePagoRecepcion}
+            />
         </SafeAreaView>
     );
 }
@@ -400,6 +480,8 @@ const styles = StyleSheet.create({
     renovarText: { color: Colors.primary, fontWeight: '700', fontSize: 15 },
     badge: { borderRadius: 6, paddingVertical: 3, paddingHorizontal: 8 },
     badgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+    // Finanzas
+    finanzaCard: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 14, marginBottom: 8 },
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 },
     modalCard: { backgroundColor: Colors.surface, borderRadius: 20, padding: 24, width: '100%', maxWidth: 620 },

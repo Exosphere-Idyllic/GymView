@@ -56,6 +56,10 @@ export default function LoginScreen() {
                 contentContainerStyle={styles.scroll}
                 keyboardShouldPersistTaps="handled"
             >
+                <TouchableOpacity style={styles.backHomeBtn} onPress={() => router.replace('/')}>
+                    <Text style={styles.backHomeText}>⬅ Volver al inicio</Text>
+                </TouchableOpacity>
+
                 {/* Logo */}
                 <View style={styles.header}>
                     <Text style={styles.logoIcon}>⚡</Text>
@@ -161,6 +165,8 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
     wrapper: { flex: 1, backgroundColor: Colors.background },
     scroll: { flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 40 },
+    backHomeBtn: { alignSelf: 'flex-start', marginBottom: 20 },
+    backHomeText: { color: Colors.textMuted, fontSize: 14, fontWeight: '600' },
     header: { alignItems: 'center', marginBottom: 20 },
     logoIcon: { fontSize: 56, marginBottom: 8 },
     logoText: { fontSize: 28, fontWeight: 'bold', color: Colors.primary, letterSpacing: 2 },

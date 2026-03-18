@@ -27,6 +27,15 @@ const pagosService = {
     },
 
     /**
+     * Historial de pagos de un cliente específico
+     * GET /api/clientes/{idCliente}/pagos
+     */
+    async getByCliente(idCliente: number): Promise<Pago[]> {
+        const data = await apiClient.get<Pago[] | any>(API_CONFIG.ENDPOINTS.CLIENTES.PAGOS(idCliente));
+        return Array.isArray(data) ? data : [];
+    },
+
+    /**
      * Obtener el comprobante (factura) de un pago.
      * GET /api/ventas/{idFactura}/comprobante
      */

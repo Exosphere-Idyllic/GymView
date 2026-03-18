@@ -2,7 +2,7 @@
 // Convertido desde index.html (MathewLara) → React Native/Expo
 // Responsive: Web Desktop + Mobile
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     Platform, Image, useWindowDimensions, Linking,
@@ -19,8 +19,18 @@ export default function Homepage() {
     const isMobile = width < 768;
     const [navOpen, setNavOpen] = useState(false);
 
+    const scrollViewRef = useRef<ScrollView>(null);
+    const [planesY, setPlanesY] = useState(0);
+
+    const scrollToPlanes = () => {
+        if (scrollViewRef.current && planesY > 0) {
+            scrollViewRef.current.scrollTo({ y: planesY, animated: true });
+        }
+    };
+
     return (
         <ScrollView
+            ref={scrollViewRef}
             style={styles.container}
             contentContainerStyle={{ paddingBottom: 0 }}
             showsVerticalScrollIndicator={false}
@@ -37,9 +47,9 @@ export default function Homepage() {
                     {/* Desktop Nav */}
                     {isDesktop ? (
                         <View style={styles.navLinks}>
-                            <TouchableOpacity><Text style={styles.navLink}>Inicio</Text></TouchableOpacity>
-                            <TouchableOpacity><Text style={styles.navLink}>Instalaciones</Text></TouchableOpacity>
-                            <TouchableOpacity><Text style={styles.navLink}>Planes</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => { if(scrollViewRef.current) scrollViewRef.current.scrollTo({ y: 0, animated: true }); }}><Text style={styles.navLink}>Inicio</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => router.push('/(public)/instalaciones')}><Text style={styles.navLink}>Instalaciones</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={scrollToPlanes}><Text style={styles.navLink}>Planes</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => router.push('/catalogo')}>
                                 <Text style={[styles.navLink, { color: Colors.primary, fontWeight: 'bold' }]}>TIENDA</Text>
                             </TouchableOpacity>
@@ -60,9 +70,9 @@ export default function Homepage() {
                 {/* Mobile Menu Dropdown */}
                 {!isDesktop && navOpen && (
                     <View style={styles.mobileMenu}>
-                        <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); }}><Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15 }]}>Inicio</Text></TouchableOpacity>
-                        <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); }}><Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15 }]}>Instalaciones</Text></TouchableOpacity>
-                        <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); }}><Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15 }]}>Planes</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); if(scrollViewRef.current) scrollViewRef.current.scrollTo({ y: 0, animated: true }); }}><Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15 }]}>Inicio</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); router.push('/(public)/instalaciones'); }}><Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15 }]}>Instalaciones</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); scrollToPlanes(); }}><Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15 }]}>Planes</Text></TouchableOpacity>
                         <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { setNavOpen(false); router.push('/catalogo'); }}>
                             <Text style={[styles.navLink, { paddingVertical: 10, fontSize: 15, color: Colors.primary, fontWeight: 'bold' }]}>TIENDA</Text>
                         </TouchableOpacity>
@@ -93,7 +103,7 @@ export default function Homepage() {
                     </Text>
                     <TouchableOpacity
                         style={[styles.heroCTA, isDesktop && { paddingVertical: 18, paddingHorizontal: 48 }]}
-                        onPress={() => router.push('/(auth)/login')}
+                        onPress={() => router.push('/(auth)/registro')}
                     >
                         <Text style={styles.heroCTAText}>INSCRÍBETE AHORA</Text>
                     </TouchableOpacity>
@@ -181,7 +191,10 @@ export default function Homepage() {
             </View>
 
             {/* ══════════════ PLANES ══════════════ */}
-            <View style={[styles.section, { backgroundColor: Colors.background }]}>
+            <View
+                style={[styles.section, { backgroundColor: Colors.background }]}
+                onLayout={(event) => setPlanesY(event.nativeEvent.layout.y)}
+            >
                 <View style={[styles.sectionInner, isDesktop && styles.sectionInnerDesktop]}>
                     <Text style={styles.sectionTitle}>Elige tu Plan</Text>
                     <Text style={styles.sectionSubtitle}>Sin contratos forzosos. Entrena a tu ritmo.</Text>

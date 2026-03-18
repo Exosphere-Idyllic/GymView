@@ -9,6 +9,7 @@ import pagosService, { Pago } from '../../services/pagos.service';
 import membresiaService, { PLANES_MEMBRESIA } from '../../services/membresia.service';
 import reportesService, { ReporteAsistencia, ReporteIngresos, ReporteRutinas } from '../../services/reportes.service';
 import productosService, { Producto } from '../../services/productos.service';
+import cuentasBancariasService, { CuentaBancaria } from '../../services/cuentasBancarias.service';
 import apiClient from '../../services/api.client';
 import { API_CONFIG } from '../../config/api.config';
 
@@ -54,6 +55,13 @@ export default function DashboardAdmin() {
     const [selectedEntrenadorTab, setSelectedEntrenadorTab] = useState<AdminUsuario | null>(null);
     const [draftAssignments, setDraftAssignments] = useState<Record<number, boolean>>({});
     const [isSavingAssignments, setIsSavingAssignments] = useState(false);
+
+    // ── Estado Cuentas Bancarias ─────────────────────────────────
+    const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancaria[]>([]);
+    const [loadingCuentas, setLoadingCuentas] = useState(false);
+    const [formCuenta, setFormCuenta] = useState({ nombreBanco: '', numeroCuenta: '', tipoCuenta: 'Ahorros', titular: 'Iron Fitness S.A.' });
+    const [mostrarFormCuenta, setMostrarFormCuenta] = useState(false);
+    const [savingCuenta, setSavingCuenta] = useState(false);
 
     const tabs: { key: Tab; label: string; icon: string }[] = [
         { key: 'resumen', label: 'Resumen', icon: '📊' },
@@ -203,6 +211,18 @@ export default function DashboardAdmin() {
         }
     }, []);
 
+    const cargarCuentas = useCallback(async () => {
+        setLoadingCuentas(true);
+        try {
+            const data = await cuentasBancariasService.listarTodas();
+            setCuentasBancarias(data);
+        } catch (e: any) {
+            setCuentasBancarias([]);
+        } finally {
+            setLoadingCuentas(false);
+        }
+    }, []);
+
     useEffect(() => {
         cargarStats();
         cargarLogs();
@@ -216,7 +236,7 @@ export default function DashboardAdmin() {
             cargarClientes();
         }
         if (activeTab === 'tienda') cargarProductos();
-        if (activeTab === 'pagos') cargarPagos();
+        if (activeTab === 'pagos') { cargarPagos(); cargarCuentas(); }
         if (activeTab === 'logs') cargarLogs();
         if (activeTab === 'reportes') cargarReportes();
     }, [activeTab]);
@@ -894,6 +914,108 @@ export default function DashboardAdmin() {
                                 ))}
                             </>
                         )}
+
+                        {/* ── Sección Cuentas Bancarias ── */}
+                        <View style={{ marginTop: 28 }}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>🏦 Cuentas Bancarias</Text>
+                                <TouchableOpacity style={styles.addBtn} onPress={() => setMostrarFormCuenta(!mostrarFormCuenta)}>
+                                    <Text style={styles.addBtnText}>{mostrarFormCuenta ? 'Cancelar' : '+ Nueva Cuenta'}</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {mostrarFormCuenta && (
+                                <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: Colors.primary }]}>
+                                    <TextInput style={styles.feInput} placeholder="Nombre del Banco" placeholderTextColor={Colors.textMuted}
+                                        value={formCuenta.nombreBanco} onChangeText={v => setFormCuenta(p => ({ ...p, nombreBanco: v }))} />
+                                    <TextInput style={styles.feInput} placeholder="Número de Cuenta" placeholderTextColor={Colors.textMuted}
+                                        value={formCuenta.numeroCuenta} onChangeText={v => setFormCuenta(p => ({ ...p, numeroCuenta: v }))} />
+                                    <TextInput style={styles.feInput} placeholder="Tipo (Ahorros / Corriente)" placeholderTextColor={Colors.textMuted}
+                                        value={formCuenta.tipoCuenta} onChangeText={v => setFormCuenta(p => ({ ...p, tipoCuenta: v }))} />
+                                    <TextInput style={styles.feInput} placeholder="Titular" placeholderTextColor={Colors.textMuted}
+                                        value={formCuenta.titular} onChangeText={v => setFormCuenta(p => ({ ...p, titular: v }))} />
+                                    <TouchableOpacity
+                                        style={[styles.addBtn, { alignSelf: 'flex-end', marginTop: 8, opacity: savingCuenta ? 0.6 : 1 }]}
+                                        disabled={savingCuenta}
+                                        onPress={async () => {
+                                            if (!formCuenta.nombreBanco || !formCuenta.numeroCuenta) {
+                                                Alert.alert('Error', 'Banco y número de cuenta son obligatorios');
+                                                return;
+                                            }
+                                            setSavingCuenta(true);
+                                            try {
+                                                await cuentasBancariasService.crear(formCuenta);
+                                                Alert.alert('✅', 'Cuenta bancaria registrada');
+                                                setFormCuenta({ nombreBanco: '', numeroCuenta: '', tipoCuenta: 'Ahorros', titular: 'Iron Fitness S.A.' });
+                                                setMostrarFormCuenta(false);
+                                                const data = await cuentasBancariasService.listarTodas();
+                                                setCuentasBancarias(data);
+                                            } catch (e: any) {
+                                                Alert.alert('Error', e.message || 'No se pudo crear la cuenta');
+                                            } finally {
+                                                setSavingCuenta(false);
+                                            }
+                                        }}
+                                    >
+                                        <Text style={styles.addBtnText}>{savingCuenta ? 'Guardando...' : '💾 Guardar'}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {loadingCuentas ? (
+                                <View style={styles.loadingRow}>
+                                    <ActivityIndicator color={Colors.primary} />
+                                    <Text style={styles.loadingText}>Cargando cuentas...</Text>
+                                </View>
+                            ) : cuentasBancarias.length === 0 ? (
+                                <View style={styles.emptyBox}>
+                                    <Text style={styles.emptyText}>No hay cuentas bancarias registradas</Text>
+                                    <TouchableOpacity onPress={async () => {
+                                        setLoadingCuentas(true);
+                                        try { setCuentasBancarias(await cuentasBancariasService.listarTodas()); } catch(e) {}
+                                        finally { setLoadingCuentas(false); }
+                                    }}>
+                                        <Text style={{ color: Colors.primary, marginTop: 8 }}>🔄 Recargar</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                cuentasBancarias.map(c => (
+                                    <View key={c.idCuenta} style={[styles.card, !c.activa && { opacity: 0.5 }]}>
+                                        <View style={styles.cardRow}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.cardName}>🏦 {c.nombreBanco}</Text>
+                                                <Text style={styles.cardSub}>Cuenta: {c.numeroCuenta} · {c.tipoCuenta}</Text>
+                                                <Text style={[styles.cardSub, { fontSize: 11 }]}>Titular: {c.titular}</Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                style={{ padding: 8 }}
+                                                onPress={async () => {
+                                                    const execDel = async () => {
+                                                        try {
+                                                            await cuentasBancariasService.eliminar(c.idCuenta);
+                                                            Alert.alert('✅', 'Cuenta eliminada');
+                                                            setCuentasBancarias(prev => prev.filter(x => x.idCuenta !== c.idCuenta));
+                                                        } catch(e:any) {
+                                                            Alert.alert('Error', e.message || 'No se pudo eliminar');
+                                                        }
+                                                    };
+                                                    if (Platform.OS === 'web') {
+                                                        if (window.confirm(`¿Eliminar cuenta ${c.numeroCuenta}?`)) execDel();
+                                                    } else {
+                                                        Alert.alert('Eliminar', `¿Eliminar cuenta ${c.numeroCuenta}?`, [
+                                                            { text: 'Cancelar', style: 'cancel' },
+                                                            { text: 'Eliminar', style: 'destructive', onPress: execDel }
+                                                        ]);
+                                                    }
+                                                }}
+                                            >
+                                                <Text style={{ color: Colors.danger, fontSize: 13, fontWeight: '600' }}>🗑️</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                ))
+                            )}
+                        </View>
                     </>
                 )}
 

@@ -159,6 +159,10 @@ export default function RegistroScreen() {
         >
             <ScrollView contentContainerStyle={[styles.scroll, isDesktop && styles.scrollDesktop]} keyboardShouldPersistTaps="handled">
 
+                <TouchableOpacity style={styles.backHomeBtn} onPress={() => router.replace('/')}>
+                    <Text style={styles.backHomeText}>⬅ Volver al inicio</Text>
+                </TouchableOpacity>
+
                 {/* ── Logo ── */}
                 <View style={styles.logoArea}>
                     <Text style={styles.logoIcon}>⚡</Text>
@@ -337,6 +341,10 @@ const styles = StyleSheet.create({
     wrapper:        { flex: 1, backgroundColor: Colors.background },
     scroll:         { flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 40 },
     scrollDesktop:  { alignItems: 'center' },
+    
+    backHomeBtn:    { alignSelf: 'flex-start', marginBottom: 12 },
+    backHomeText:   { color: Colors.textMuted, fontSize: 14, fontWeight: '600' },
+
     logoArea:       { alignItems: 'center', marginBottom: 20 },
     logoIcon:       { fontSize: 48, marginBottom: 6 },
     logoTitle:      { fontSize: 22, fontWeight: 'bold', color: Colors.primary, textAlign: 'center', letterSpacing: 1 },
