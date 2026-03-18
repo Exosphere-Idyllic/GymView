@@ -6,18 +6,48 @@
     "orientation": "portrait",
     "scheme": "ironfitness",
     "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#121212"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ironfitness.app"
     },
     "android": {
-      "package": "com.ironfitness.app"
+      "package": "com.ironfitness.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#121212"
+      },
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-updates"
     ],
+    "updates": {
+      "enabled": true,
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": "1.0.0",
     "web": {
-      "bundler": "metro"
-    }
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "40b39266-5024-44fa-8b49-b296980b98b3"
+      }
+    },
+    "owner": "exosphere-idyllic"
   }
 }
