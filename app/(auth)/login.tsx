@@ -164,8 +164,8 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
     wrapper: { flex: 1, backgroundColor: Colors.background },
-    scroll: { flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 40 },
-    backHomeBtn: { alignSelf: 'flex-start', marginBottom: 20 },
+    scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 20, paddingBottom: 40 },
+    backHomeBtn: { alignSelf: 'flex-start', marginBottom: 20, width: '100%', maxWidth: 500 },
     backHomeText: { color: Colors.textMuted, fontSize: 14, fontWeight: '600' },
     header: { alignItems: 'center', marginBottom: 20 },
     logoIcon: { fontSize: 56, marginBottom: 8 },
@@ -174,12 +174,12 @@ const styles = StyleSheet.create({
     serverBadge: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
         backgroundColor: '#1a1a1a', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14,
-        marginBottom: 16, borderWidth: 1, borderColor: '#333',
+        marginBottom: 16, borderWidth: 1, borderColor: '#333', width: '100%', maxWidth: 500,
     },
     serverText: { color: '#aaa', fontSize: 13 },
     card: {
         backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
-        borderRadius: 16, padding: 24,
+        borderRadius: 16, padding: 24, width: '100%', maxWidth: 500, alignSelf: 'center',
     },
     cardTitle: { fontSize: 18, fontWeight: '600', color: Colors.textMuted, textAlign: 'center', marginBottom: 24 },
     inputGroup: { marginBottom: 18 },

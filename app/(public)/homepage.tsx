@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../../src/theme/colors';
+import { useAuth } from '../../src/store/AuthContext';
 
 const isWeb = Platform.OS === 'web';
 
@@ -18,6 +19,15 @@ export default function Homepage() {
     const isDesktop = width >= 992;
     const isMobile = width < 768;
     const [navOpen, setNavOpen] = useState(false);
+    const { isAuthenticated } = useAuth();
+
+    const handleZonaSocios = () => {
+        if (isAuthenticated) {
+            router.push('/(tabs)');
+        } else {
+            router.push('/(auth)/login');
+        }
+    };
 
     const scrollViewRef = useRef<ScrollView>(null);
     const [planesY, setPlanesY] = useState(0);
@@ -55,7 +65,7 @@ export default function Homepage() {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.btnZonaSocios}
-                                onPress={() => router.push('/(auth)/login')}
+                                onPress={handleZonaSocios}
                             >
                                 <Text style={styles.btnZonaSociosText}>👤 Zona de Socios</Text>
                             </TouchableOpacity>
@@ -78,7 +88,7 @@ export default function Homepage() {
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.btnZonaSocios, { marginTop: 8, alignSelf: 'flex-start' }]}
-                            onPress={() => { setNavOpen(false); router.push('/(auth)/login'); }}
+                            onPress={() => { setNavOpen(false); handleZonaSocios(); }}
                         >
                             <Text style={styles.btnZonaSociosText}>👤 Zona de Socios</Text>
                         </TouchableOpacity>
