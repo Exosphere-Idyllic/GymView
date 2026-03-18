@@ -259,6 +259,65 @@ export default function Homepage() {
                 </View>
             </View>
 
+            {/* ══════════════ DESCARGAR APP ══════════════ */}
+            <View style={[styles.section, { backgroundColor: '#0a0a0a' }]}>
+                <View style={[styles.sectionInner, isDesktop && styles.sectionInnerDesktop]}>
+                    <View style={[styles.appDownloadRow, isDesktop && { flexDirection: 'row', alignItems: 'center', gap: 60 }]}>
+                        {/* Text Side */}
+                        <View style={[styles.appDownloadText, isDesktop && { flex: 1 }]}>
+                            <Text style={styles.appDownloadEyebrow}>📱 NUEVA APP MÓVIL</Text>
+                            <Text style={[styles.appDownloadTitle, { fontSize: isDesktop ? 38 : 28 }]}>
+                                Lleva Iron Fitness{'\n'}en tu bolsillo
+                            </Text>
+                            <Text style={styles.appDownloadDesc}>
+                                Accede a tu membresía, consulta tus rutinas, registra tu asistencia con QR y mucho más directamente desde tu celular Android.
+                            </Text>
+                            <View style={{ marginTop: 16, marginBottom: 24 }}>
+                                {[
+                                    '📋 Consulta tus rutinas asignadas',
+                                    '📊 Historial de pagos y finanzas',
+                                    '📷 Escanea QR para registrar asistencia',
+                                    '🔔 Notificaciones de tu membresía',
+                                ].map((feature, i) => (
+                                    <Text key={i} style={styles.appDownloadFeature}>{feature}</Text>
+                                ))}
+                            </View>
+                            <TouchableOpacity
+                                style={styles.appDownloadBtn}
+                                onPress={() => Linking.openURL('/IronFitness.apk')}
+                            >
+                                <Text style={styles.appDownloadBtnIcon}>⬇️</Text>
+                                <View>
+                                    <Text style={styles.appDownloadBtnLabel}>DESCARGAR APK</Text>
+                                    <Text style={styles.appDownloadBtnSub}>Android • v1.0.0</Text>
+                                </View>
+                            </TouchableOpacity>
+                            <Text style={styles.appDownloadNote}>
+                                * Requiere Android 8.0 o superior. Habilita "Instalar apps de fuentes desconocidas" en la configuración de tu dispositivo.
+                            </Text>
+                        </View>
+
+                        {/* Visual Side */}
+                        <View style={[styles.appDownloadVisual, isDesktop && { flex: 1 }]}>
+                            <View style={styles.phoneMockup}>
+                                <View style={styles.phoneNotch} />
+                                <View style={styles.phoneScreen}>
+                                    <Text style={{ fontSize: 42, marginBottom: 12 }}>⚡</Text>
+                                    <Text style={{ color: Colors.primary, fontSize: 22, fontWeight: 'bold', letterSpacing: 2 }}>IRON FITNESS</Text>
+                                    <Text style={{ color: Colors.textMuted, fontSize: 12, marginTop: 6 }}>Sistema de Gestión</Text>
+                                    <View style={styles.phoneButtons}>
+                                        <View style={styles.phoneBtn}><Text style={styles.phoneBtnText}>🏠 Inicio</Text></View>
+                                        <View style={styles.phoneBtn}><Text style={styles.phoneBtnText}>🏋️ Rutinas</Text></View>
+                                        <View style={styles.phoneBtn}><Text style={styles.phoneBtnText}>📊 Finanzas</Text></View>
+                                        <View style={styles.phoneBtn}><Text style={styles.phoneBtnText}>👤 Perfil</Text></View>
+                                    </View>
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            </View>
+
             {/* ══════════════ FOOTER ══════════════ */}
             <View style={styles.footer}>
                 <Text style={styles.footerText}>© 2026 Iron Fitness. Todos los derechos reservados.</Text>
@@ -421,4 +480,44 @@ const styles = StyleSheet.create({
     },
     footerText: { color: Colors.text, fontSize: 14, marginBottom: 4 },
     footerSub: { color: '#6c757d', fontSize: 12 },
+
+    // App Download
+    appDownloadRow: { gap: 30 },
+    appDownloadText: { paddingBottom: 20 },
+    appDownloadEyebrow: {
+        color: Colors.primary, fontWeight: 'bold',
+        fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12,
+    },
+    appDownloadTitle: { fontWeight: 'bold', color: Colors.text, marginBottom: 16, lineHeight: 46 },
+    appDownloadDesc: { color: '#adb5bd', fontSize: 15, lineHeight: 24, marginBottom: 8 },
+    appDownloadFeature: { color: Colors.text, fontSize: 14, marginBottom: 10, lineHeight: 22 },
+    appDownloadBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 14,
+        backgroundColor: Colors.primary, borderRadius: 14,
+        paddingVertical: 16, paddingHorizontal: 28, alignSelf: 'flex-start',
+    },
+    appDownloadBtnIcon: { fontSize: 28 },
+    appDownloadBtnLabel: { color: Colors.black, fontWeight: 'bold', fontSize: 16 },
+    appDownloadBtnSub: { color: 'rgba(0,0,0,0.6)', fontSize: 12, marginTop: 2 },
+    appDownloadNote: { color: '#6c757d', fontSize: 11, marginTop: 16, lineHeight: 16 },
+    appDownloadVisual: { alignItems: 'center', paddingVertical: 20 },
+    phoneMockup: {
+        width: 220, height: 400, backgroundColor: '#1a1a1a',
+        borderRadius: 32, borderWidth: 3, borderColor: '#333',
+        overflow: 'hidden', alignItems: 'center',
+    },
+    phoneNotch: {
+        width: 100, height: 24, backgroundColor: '#000',
+        borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
+    },
+    phoneScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
+    phoneButtons: {
+        flexDirection: 'row', flexWrap: 'wrap', gap: 8,
+        marginTop: 24, justifyContent: 'center',
+    },
+    phoneBtn: {
+        backgroundColor: '#2a2a2a', borderRadius: 10,
+        paddingVertical: 10, paddingHorizontal: 12, width: 80, alignItems: 'center',
+    },
+    phoneBtnText: { color: Colors.text, fontSize: 10 },
 });
