@@ -83,7 +83,7 @@ export default function CatalogoScreen() {
 
     const agregarAlCarrito = (producto: Producto) => {
         const id = getId(producto);
-        const imagenUrl = productosService.getImagenUrl(id);
+        const imagenUrl = productosService.getImagenUrl(id, producto.imagenUrl);
 
         setCarrito(prev => {
             const idx = prev.findIndex(i => i.id === id);
@@ -219,7 +219,7 @@ export default function CatalogoScreen() {
                                 <View key={id} style={[styles.productCard, { width: cardWidth }]}>
                                     {/* Imagen */}
                                     <Image
-                                        source={{ uri: productosService.getImagenUrl(id) }}
+                                        source={{ uri: productosService.getImagenUrl(id, producto.imagenUrl) }}
                                         style={styles.productImg}
                                         defaultSource={{ uri: 'https://images.unsplash.com/photo-1593095948071-474c5cc2989d?w=400&q=80' }}
                                     />

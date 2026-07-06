@@ -26,10 +26,13 @@ const productosService = {
     },
 
     /**
-     * URL de la imagen del producto (el backend sirve la imagen en este endpoint)
+     * URL de la imagen del producto (si es una URL de Cloudinary la retorna directamente, si no, usa el backend)
      * GET /productos/{id}/imagen
      */
-    getImagenUrl(id: number): string {
+    getImagenUrl(id: number, imagenUrl?: string): string {
+        if (imagenUrl && (imagenUrl.startsWith('http://') || imagenUrl.startsWith('https://'))) {
+            return imagenUrl;
+        }
         return `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PRODUCTOS.IMAGEN(id)}`;
     },
 
