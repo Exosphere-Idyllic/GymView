@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Tex
 import Colors from '../../theme/colors';
 import { useAuth } from '../../store/AuthContext';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import authService, { AdminDashboardResponse, AdminUsuario } from '../../services/auth.service';
 import pagosService, { Pago } from '../../services/pagos.service';
 import membresiaService, { PLANES_MEMBRESIA } from '../../services/membresia.service';
@@ -88,8 +89,27 @@ export default function DashboardAdmin() {
     const [editingProduct, setEditingProduct] = useState<Producto | null>(null);
     const [savingProducto, setSavingProducto] = useState(false);
     const [formProducto, setFormProducto] = useState({
-        nombre: '', descripcion: '', precio: '0', tipo: 'Tienda', imagenUrl: ''
+        nombre: '', descripcion: '', precio: '0', tipo: 'Tienda', imagenUrl: '', imagenBase64: ''
     });
+
+    const pickImageProducto = async () => {
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.7,
+            base64: true,
+        });
+
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            const base64Str = `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`;
+            setFormProducto(prev => ({
+                ...prev,
+                imagenBase64: base64Str
+            }));
+        }
+    };
 
     // ── Cargar stats ───────────────────────────────────────────
     const cargarStats = useCallback(async () => {
@@ -790,7 +810,7 @@ export default function DashboardAdmin() {
                             <Text style={styles.sectionTitle}>Inventario de Tienda</Text>
                             <TouchableOpacity style={styles.addBtn} onPress={() => {
                                 setEditingProduct(null);
-                                setFormProducto({ nombre: '', descripcion: '', precio: '0', tipo: 'Tienda', imagenUrl: '' });
+                                setFormProducto({ nombre: '', descripcion: '', precio: '0', tipo: 'Tienda', imagenUrl: '', imagenBase64: '' });
                                 setModalProducto(true);
                             }}>
                                 <Text style={styles.addBtnText}>+ Nuevo Producto</Text>
@@ -837,7 +857,8 @@ export default function DashboardAdmin() {
                                                 descripcion: p.descripcion,
                                                 precio: p.precio.toString(),
                                                 tipo: p.tipo,
-                                                imagenUrl: p.imagenUrl || ''
+                                                imagenUrl: p.imagenUrl || '',
+                                                imagenBase64: ''
                                             });
                                             setModalProducto(true);
                                         }}>
@@ -1354,7 +1375,13 @@ export default function DashboardAdmin() {
                             <TextInput style={styles.feInput} value={formProducto.tipo} onChangeText={t => setFormProducto(prev => ({ ...prev, tipo: t }))} />
                             
                             <Text style={styles.feLabel}>URL Imagen (Opcional)</Text>
-                            <TextInput style={styles.feInput} placeholder="https://ejemplo.com/foto.jpg" placeholderTextColor="#666" value={formProducto.imagenUrl} onChangeText={t => setFormProducto(prev => ({ ...prev, imagenUrl: t }))} />
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <TextInput style={[styles.feInput, { flex: 1, marginBottom: 0 }]} placeholder="https://ejemplo.com/foto.jpg" placeholderTextColor="#666" value={formProducto.imagenUrl} onChangeText={t => setFormProducto(prev => ({ ...prev, imagenUrl: t }))} />
+                                <TouchableOpacity style={{ backgroundColor: Colors.primary, padding: 12, borderRadius: 8, height: 45, justifyContent: 'center' }} onPress={pickImageProducto}>
+                                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>📁 Archivo</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {formProducto.imagenBase64 ? <Text style={{ color: Colors.primary, fontSize: 12, marginTop: 5, marginBottom: 15 }}>✓ Imagen local seleccionada</Text> : <View style={{ height: 15 }} />}
                         </ScrollView>
 
                         <View style={styles.modalActions}>
@@ -1376,7 +1403,8 @@ export default function DashboardAdmin() {
                                             descripcion: formProducto.descripcion,
                                             precio: parseFloat(formProducto.precio) || 0,
                                             tipo: formProducto.tipo,
-                                            imagenUrl: formProducto.imagenUrl
+                                            imagenUrl: formProducto.imagenUrl,
+                                            imagenBase64: formProducto.imagenBase64
                                         };
                                         if (editingProduct) {
                                             await productosService.update(editingProduct.idProducto || editingProduct.id!, payload);
